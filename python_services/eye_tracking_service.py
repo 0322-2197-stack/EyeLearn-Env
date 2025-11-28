@@ -126,17 +126,6 @@ class EyeTrackingService:
         except Exception as e:
             logger.error(f"Error initializing real eye tracking: {e}")
             self.gaze = self.create_fallback_tracker()
-            return False
-    
-    def create_mediapipe_tracker(self):
-        """Create a real eye tracking system using MediaPipe"""
-        import mediapipe as mp
-        import math
-                self.current_frame = None
-                self.annotated_frame = None
-                self.pupils_located = False
-                self.eye_landmarks = None
-                self.gaze_direction = None
                 self.blink_detected = False
                 self.last_blink_time = time.time()
                 
