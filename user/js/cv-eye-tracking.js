@@ -17,6 +17,15 @@
  */
 
 const DEFAULT_PYTHON_SERVICE_URL = 'http://127.0.0.1:5000';
+const ENABLE_BROWSER_EYE_STREAMING = typeof window !== 'undefined'
+    ? window.ENABLE_BROWSER_EYE_STREAMING !== false
+    : true;
+const DEFAULT_BROWSER_CAPTURE_FPS = typeof window !== 'undefined' && Number(window.BROWSER_EYE_FPS) > 0
+    ? Number(window.BROWSER_EYE_FPS)
+    : 7;
+const FOCUS_ATTENTION_THRESHOLD = typeof window !== 'undefined' && typeof window.EYE_FOCUS_THRESHOLD === 'number'
+    ? window.EYE_FOCUS_THRESHOLD
+    : 0.5;
 
 function getGlobalPythonServiceUrl() {
     if (typeof window !== 'undefined') {
@@ -66,7 +75,9 @@ class CVEyeTrackingSystem {
             unfocusedTime: 0,
             currentFocusStart: null,
             currentUnfocusStart: null,
-            isCurrentlyFocused: false
+            isCurrentlyFocused: false,
+            baseFocusedTime: 0,
+            baseUnfocusedTime: 0
         };
         
         this.metrics = {
@@ -75,6 +86,22 @@ class CVEyeTrackingSystem {
             total_time: 0,
             focus_percentage: 0
         };
+        
+        // Browser streaming configuration
+        this.browserStreamingEnabled = ENABLE_BROWSER_EYE_STREAMING &&
+            typeof navigator !== 'undefined' &&
+            navigator.mediaDevices &&
+            typeof navigator.mediaDevices.getUserMedia === 'function';
+        this.captureFps = DEFAULT_BROWSER_CAPTURE_FPS;
+        this.frameIntervalMs = Math.max(150, Math.round(1000 / this.captureFps));
+        this.cameraStream = null;
+        this.captureCanvas = null;
+        this.captureCtx = null;
+        this.frameIntervalId = null;
+        this.frameBackoffTimeout = null;
+        this.frameBackoffMs = 0;
+        this.latestBackendMetrics = null;
+        this.currentUserId = null;
         
         console.log(`🆕 CVEyeTrackingSystem instance created: ${this.instanceId}`);
         
@@ -93,6 +120,18 @@ class CVEyeTrackingSystem {
     async init() {
         console.log(`🎯 Initializing Enhanced CV Eye Tracking System v2.5... (Instance: ${this.instanceId})`);
         console.log('Features: Instant activation, seamless transitions, crash-resistant switching');
+        
+        if (this.browserStreamingEnabled) {
+            try {
+                await this.initializeBrowserStreamingMode();
+                return;
+            } catch (streamError) {
+                console.warn('⚠️ Browser-based streaming failed, falling back to legacy service:', streamError);
+                this.browserStreamingEnabled = false;
+                this.stopBrowserCamera();
+                this.stopLocalFrameStreaming();
+            }
+        }
         
         // Clean up any existing intervals before starting new ones
         this.cleanupAllIntervals();
@@ -154,6 +193,33 @@ class CVEyeTrackingSystem {
         }
     }
     
+    async initializeBrowserStreamingMode() {
+        console.log('🌐 Using browser-based eye tracking stream');
+        
+        // Clean up any existing resources
+        this.cleanupAllIntervals();
+        this.cleanupInterface();
+        
+        await this.checkServiceHealth(true);
+        
+        this.displayTrackingInterface({ useLocalVideo: true });
+        this.initializeTimers();
+        this.isTracking = true;
+        
+        // Resolve user context once for payloads
+        try {
+            this.currentUserId = await this.getCurrentUserId();
+        } catch (userError) {
+            console.warn('⚠️ Could not resolve user ID, defaulting to 1', userError);
+            this.currentUserId = 1;
+        }
+        
+        await this.startBrowserCamera();
+        this.startLocalFrameStreaming();
+        this.startDataSaving();
+        this.startHealthMonitoring();
+    }
+    
     startHealthMonitoring() {
         // Monitor service health every 10 seconds
         this.healthMonitorInterval = setInterval(async () => {
@@ -166,6 +232,170 @@ class CVEyeTrackingSystem {
         console.log('💓 Health monitoring started - checking every 10 seconds');
     }
     
+    async startBrowserCamera() {
+        if (!this.browserStreamingEnabled) {
+            throw new Error('Browser streaming disabled');
+        }
+        
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera API not available');
+        }
+        
+        try {
+            this.cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: 640,
+                    height: 360,
+                    frameRate: { max: this.captureFps }
+                },
+                audio: false
+            });
+            
+            const videoElement = document.getElementById('tracking-video');
+            if (videoElement) {
+                videoElement.srcObject = this.cameraStream;
+                videoElement.muted = true;
+                videoElement.playsInline = true;
+                if (typeof videoElement.play === 'function') {
+                    videoElement.play().catch(() => {});
+                }
+            }
+            
+            this.captureCanvas = document.createElement('canvas');
+            this.captureCtx = this.captureCanvas.getContext('2d', { willReadFrequently: true });
+            
+            console.log(`📹 Browser camera stream started @ ${this.captureFps} FPS`);
+        } catch (error) {
+            console.error('❌ Unable to access camera:', error);
+            if (!this.cameraErrorShown) {
+                this.cameraErrorShown = true;
+                this.showCameraError();
+            }
+            throw error;
+        }
+    }
+    
+    stopBrowserCamera() {
+        if (this.cameraStream) {
+            this.cameraStream.getTracks().forEach(track => track.stop());
+            this.cameraStream = null;
+        }
+        this.captureCanvas = null;
+        this.captureCtx = null;
+    }
+    
+    startLocalFrameStreaming() {
+        if (!this.browserStreamingEnabled) {
+            return;
+        }
+        
+        this.stopLocalFrameStreaming();
+        this.frameBackoffMs = 0;
+        
+        this.frameIntervalId = setInterval(() => {
+            this.sendFrameToBackend();
+        }, this.frameIntervalMs);
+        
+        console.log(`📡 Started browser frame streaming every ${this.frameIntervalMs}ms`);
+    }
+    
+    stopLocalFrameStreaming() {
+        if (this.frameIntervalId) {
+            clearInterval(this.frameIntervalId);
+            this.frameIntervalId = null;
+        }
+        if (this.frameBackoffTimeout) {
+            clearTimeout(this.frameBackoffTimeout);
+            this.frameBackoffTimeout = null;
+        }
+    }
+    
+    async sendFrameToBackend() {
+        if (!this.browserStreamingEnabled || !this.cameraStream || !this.captureCtx || this.isTransitioning) {
+            return;
+        }
+        
+        const videoElement = document.getElementById('tracking-video');
+        if (!videoElement || videoElement.readyState < 2) {
+            return;
+        }
+        
+        const width = videoElement.videoWidth || 640;
+        const height = videoElement.videoHeight || 360;
+        
+        this.captureCanvas.width = width;
+        this.captureCanvas.height = height;
+        this.captureCtx.drawImage(videoElement, 0, 0, width, height);
+        const frameData = this.captureCanvas.toDataURL('image/jpeg', 0.7);
+        
+        const payload = {
+            frame_base64: frameData,
+            user_id: this.currentUserId || 1,
+            module_id: this.moduleId,
+            section_id: this.sectionId,
+            fps: this.captureFps
+        };
+        
+        try {
+            const response = await fetch(`${this.pythonServiceUrl}/api/frames`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            this.handleFrameResult(result);
+            this.frameBackoffMs = 0;
+        } catch (error) {
+            this.handleFrameSendError(error);
+        }
+    }
+    
+    handleFrameResult(result) {
+        this.isConnected = true;
+        this.latestBackendMetrics = result.metrics || null;
+        
+        const attentionScore = this.latestBackendMetrics && typeof this.latestBackendMetrics.attention_score === 'number'
+            ? this.latestBackendMetrics.attention_score
+            : 0;
+        const isFocused = attentionScore >= FOCUS_ATTENTION_THRESHOLD;
+        
+        if (this.timers.isCurrentlyFocused !== isFocused) {
+            this.handleFocusChange(isFocused);
+        }
+        
+        this.updateTimerDisplay();
+    }
+    
+    handleFrameSendError(error) {
+        console.warn('⚠️ Frame send error:', error?.message || error);
+        this.isConnected = false;
+        
+        if (this.frameIntervalId) {
+            clearInterval(this.frameIntervalId);
+            this.frameIntervalId = null;
+        }
+        
+        this.frameBackoffMs = this.frameBackoffMs === 0 ? 2000 : Math.min(this.frameBackoffMs * 2, 15000);
+        if (this.frameBackoffTimeout) {
+            clearTimeout(this.frameBackoffTimeout);
+        }
+        
+        this.frameBackoffTimeout = setTimeout(() => {
+            if (!this.cameraStream) {
+                return;
+            }
+            console.log('🔄 Retrying frame streaming after backoff');
+            this.startLocalFrameStreaming();
+        }, this.frameBackoffMs);
+    }
+    
     async attemptReconnection() {
         if (this.reconnectionAttempts >= this.maxReconnectionAttempts) {
             console.warn('🚫 Max reconnection attempts reached, stopping automatic reconnection');
@@ -174,6 +404,14 @@ class CVEyeTrackingSystem {
         
         this.reconnectionAttempts++;
         console.log(`🔄 Reconnection attempt ${this.reconnectionAttempts}/${this.maxReconnectionAttempts}`);
+        
+        if (this.browserStreamingEnabled) {
+            await this.checkServiceHealth(true);
+            if (this.isConnected && this.cameraStream && !this.frameIntervalId) {
+                this.startLocalFrameStreaming();
+            }
+            return;
+        }
         
         // Clean up intervals before reconnection to prevent accumulation
         this.cleanupAllIntervals();
@@ -297,6 +535,10 @@ class CVEyeTrackingSystem {
         this.timers.focusedTime = 0;
         this.timers.unfocusedTime = 0;
         this.timers.isCurrentlyFocused = false;
+        this.timers.baseFocusedTime = 0;
+        this.timers.baseUnfocusedTime = 0;
+        this.timers.currentFocusStart = null;
+        this.timers.currentUnfocusStart = null;
         
         // Start the timer update loop
         this.startTimerUpdates();
@@ -414,19 +656,44 @@ class CVEyeTrackingSystem {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), quickCheck ? 2000 : 5000); // 2s for quick, 5s for normal
             
-            const response = await fetch(`${this.pythonServiceUrl}/api/health`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                signal: controller.signal
-            });
+            const healthPaths = ['/healthz', '/api/health', '/health'];
+            let response = null;
+            let lastError = null;
+            
+            for (const path of healthPaths) {
+                try {
+                    response = await fetch(`${this.pythonServiceUrl}${path}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        signal: controller.signal
+                    });
+                    if (response.ok) {
+                        break;
+                    }
+                } catch (err) {
+                    lastError = err;
+                }
+            }
 
             clearTimeout(timeoutId);
 
-            if (response.ok) {
-                const data = await response.json();
-                this.isConnected = data.success;
+            if (response && response.ok) {
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    data = {};
+                }
+                
+                if (typeof data.success === 'boolean') {
+                    this.isConnected = data.success;
+                } else if (data.status === 'ok' || data.status === 'healthy') {
+                    this.isConnected = true;
+                } else {
+                    this.isConnected = true;
+                }
                 if (data.version && !quickCheck) {
                     console.log(`✅ Connected to Enhanced Eye Tracking Service ${data.version}`);
                     console.log(`📋 Available features:`, data.features);
@@ -450,6 +717,11 @@ class CVEyeTrackingSystem {
     }
 
     async startTracking() {
+        if (this.browserStreamingEnabled) {
+            this.isTracking = true;
+            return true;
+        }
+        
         if (!this.isConnected) {
             console.log('Cannot start tracking - service not connected');
             return false;
@@ -559,6 +831,16 @@ class CVEyeTrackingSystem {
 
     async stopTracking() {
         console.log('🛑 Stopping eye tracking...');
+        
+        if (this.browserStreamingEnabled) {
+            this.stopLocalFrameStreaming();
+            this.stopBrowserCamera();
+            this.isTracking = false;
+            this.cleanupInterface();
+            this.stopDataSaving();
+            this.stopHealthMonitoring();
+            return;
+        }
         
         // Set transitioning flag to prevent video update errors
         if (!this.isTransitioning) {
@@ -697,6 +979,11 @@ class CVEyeTrackingSystem {
             this.dataSaveInterval = null;
         }
         
+        if (this.browserStreamingEnabled) {
+            this.stopLocalFrameStreaming();
+            this.stopBrowserCamera();
+        }
+        
         console.log('✅ All intervals cleaned up');
     }
 
@@ -767,6 +1054,10 @@ class CVEyeTrackingSystem {
     }
 
     setupStatusUpdates() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         // Check status every 2 seconds
         this.statusUpdateInterval = setInterval(async () => {
             await this.updateStatus();
@@ -830,10 +1121,23 @@ class CVEyeTrackingSystem {
         }
     }
 
-    displayTrackingInterface() {
+    displayTrackingInterface(options = {}) {
+        const { useLocalVideo = false } = options;
+        
         // Create the compact interface
         const trackingContainer = document.createElement('div');
         trackingContainer.id = 'cv-eye-tracking-interface';
+        const videoMarkup = useLocalVideo
+            ? `<video id="tracking-video"
+                      autoplay
+                      muted
+                      playsinline
+                      style="width: 100%; height: 100px; display: block; background: #000;"
+                      class="rounded-b-lg"></video>`
+            : `<img id="tracking-video" 
+                     style="width: 100%; height: 100px; display: block; background: #000;"
+                     class="rounded-b-lg"
+                     alt="Live camera feed">`;
         trackingContainer.innerHTML = `
             <div class="fixed top-20 right-4 bg-black text-white shadow-2xl rounded-lg border border-gray-600 z-50" style="width: 180px; font-family: system-ui;">
                 <!-- Header with red dot and "Eye Tracking" -->
@@ -867,10 +1171,7 @@ class CVEyeTrackingSystem {
                 
                 <!-- Video feed container -->
                 <div class="relative bg-black">
-                    <img id="tracking-video" 
-                         style="width: 100%; height: 100px; display: block; background: #000;"
-                         class="rounded-b-lg"
-                         alt="Live camera feed">
+                    ${videoMarkup}
                 </div>
             </div>
         `;
@@ -888,13 +1189,25 @@ class CVEyeTrackingSystem {
             });
         }, 100);
         
-        // Start video updates immediately
-        this.startVideoUpdates();
+        if (useLocalVideo) {
+            const videoElement = document.getElementById('tracking-video');
+            if (videoElement) {
+                videoElement.muted = true;
+                videoElement.playsInline = true;
+            }
+        } else {
+            // Start video updates immediately
+            this.startVideoUpdates();
+        }
         
         console.log('📺 Eye tracking interface displayed - exact format from image');
     }
 
     startVideoUpdates() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         console.log('🎬 Starting video updates...');
         
         if (this.videoUpdateInterval) {
@@ -914,6 +1227,10 @@ class CVEyeTrackingSystem {
     }
 
     startVideoWatchdog() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         // Simple watchdog - just check if element exists (like test file simplicity)
         this.videoWatchdog = setInterval(() => {
             const videoElement = document.getElementById('tracking-video');
@@ -942,6 +1259,10 @@ class CVEyeTrackingSystem {
 
     // SIMPLIFIED updateVideoFrame method - WITH CONNECTION ERROR HANDLING
     async updateVideoFrame() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         if (!this.isConnected || this.isTransitioning) {
             return; // Skip updates during transitions or when disconnected
         }
@@ -1066,6 +1387,10 @@ class CVEyeTrackingSystem {
     }
 
     startFullscreenVideoUpdates() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         console.log('🖥️ Starting fullscreen video updates...');
         
         if (this.fullscreenVideoInterval) {
@@ -1088,6 +1413,10 @@ class CVEyeTrackingSystem {
     }
 
     async updateFullscreenVideoFrame() {
+        if (this.browserStreamingEnabled) {
+            return;
+        }
+        
         if (!this.isConnected || this.isTransitioning) {
             return; // Skip updates during transitions or when disconnected
         }
@@ -1305,6 +1634,11 @@ class CVEyeTrackingSystem {
             this.isConnected = false;
             this.isTracking = false;
             this.countdownActive = false;
+            
+            if (this.browserStreamingEnabled) {
+                this.stopLocalFrameStreaming();
+                this.stopBrowserCamera();
+            }
             
             // Clean up all intervals and monitoring
             this.cleanupAllIntervals();
