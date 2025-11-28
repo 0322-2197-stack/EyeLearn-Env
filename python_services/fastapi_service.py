@@ -10,6 +10,7 @@ import base64
 import logging
 import asyncio
 import threading
+import uuid
 from datetime import datetime
 from typing import Optional, Dict, List
 from contextlib import asynccontextmanager
@@ -18,7 +19,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depe
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field, validator
 import uvicorn
 import cv2
 import numpy as np
@@ -120,6 +122,23 @@ class HealthResponse(BaseModel):
     service_version: str = "1.0.0"
 
 
+class FramePayload(BaseModel):
+    """Payload for browser-streamed frames"""
+    frame_id: Optional[str] = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None
+    module_id: Optional[str] = None
+    section_id: Optional[str] = None
+    timestamp: Optional[float] = Field(default_factory=lambda: time.time())
+    fps: Optional[float] = None
+    frame_base64: str
+    
+    @validator("frame_base64")
+    def validate_base64(cls, value: str) -> str:
+        if not value.startswith("data:image/"):
+            raise ValueError("Expected data URL with mime type")
+        return value
+
+
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -184,13 +203,26 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
+# CORS configuration - read from environment or allow all
+# Note: When allow_credentials=True, you cannot use allow_origins=["*"]
+# So we either disable credentials or use specific origins
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "*")
+if allowed_origins_env == "*":
+    # If wildcard, disable credentials (required for CORS spec)
+    allow_origins = ["*"]
+    allow_creds = False
+else:
+    # Parse comma-separated origins
+    allow_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    allow_creds = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_creds,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -440,6 +472,61 @@ async def get_current_frame():
         }
     except Exception as e:
         logger.error(f"Error getting frame: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/frames", tags=["Video"])
+async def receive_browser_frame(payload: FramePayload):
+    """Receive browser-streamed frame and process it for eye tracking"""
+    try:
+        if not eye_tracker:
+            raise HTTPException(status_code=503, detail="Eye tracking service not initialized")
+        
+        # Decode base64 frame
+        try:
+            header, b64_data = payload.frame_base64.split(",", 1)
+            raw_bytes = base64.b64decode(b64_data)
+            np_arr = np.frombuffer(raw_bytes, dtype=np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            
+            if frame is None:
+                raise ValueError("Failed to decode image")
+        except Exception as e:
+            logger.error(f"Error decoding frame: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid frame data: {str(e)}")
+        
+        # Process frame using eye tracker
+        user_id = payload.user_id or eye_tracker.current_user_id
+        module_id = payload.module_id or eye_tracker.current_module_id
+        section_id = payload.section_id or eye_tracker.current_section_id
+        
+        if not user_id or not module_id:
+            raise HTTPException(status_code=400, detail="user_id and module_id are required")
+        
+        # Process the frame
+        status, frame_data = await run_in_threadpool(
+            eye_tracker.process_remote_frame,
+            frame,
+            user_id,
+            module_id,
+            section_id
+        )
+        
+        return {
+            "success": True,
+            "frame_id": payload.frame_id,
+            "user_id": user_id,
+            "module_id": module_id,
+            "section_id": section_id,
+            "timestamp": payload.timestamp or time.time(),
+            "status": status,
+            "metrics": status.get("metrics") if isinstance(status, dict) else None,
+            "current_frame": frame_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing browser frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
