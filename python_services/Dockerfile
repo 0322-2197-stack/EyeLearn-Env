@@ -30,12 +30,13 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # Make startup script executable
-RUN chmod +x start.sh
+RUN chmod +x start.sh || true
 
 # Expose port (Railway will set PORT env var)
-EXPOSE $PORT
+EXPOSE 8000
 
-# Use startup script to run FastAPI service
+# Use python3 directly to run FastAPI service
 # Railway will override PORT via environment variable
-CMD ["./start.sh"]
+# Using shell form to allow PORT variable substitution
+CMD ["/bin/bash", "-c", "python3 -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
 
