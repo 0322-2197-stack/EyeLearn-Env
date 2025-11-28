@@ -1,0 +1,63 @@
+name: Deploy Eye Tracking System
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: capstone_db
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        extensions: pdo, pdo_mysql, json
+    
+    - name: Verify Database Configuration
+      run: |
+        php -r "require 'database/config.php'; echo 'DB Config OK';"
+    
+    - name: Check PHP Syntax
+      run: |
+        find . -name "*.php" -type f -exec php -l {} \;
+    
+    - name: Check JavaScript Syntax
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+    
+    - name: Lint JavaScript
+      run: |
+        npm install -g jshint
+        jshint user/js/cv-eye-tracking.js || true
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Deploy to Server
+      run: |
+        echo "Deployment steps here"
+        # Add your deployment commands
