@@ -1,6 +1,3 @@
-[providers]
-python = "3.9"
-
 [phases.setup]
 nixPkgs = ["python39", "python39Packages.pip", "gcc", "cmake"]
 
