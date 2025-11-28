@@ -1223,6 +1223,7 @@ class EyeTrackingService:
         if not self.session_data['session_start']:
             self.session_data['session_start'] = time.time()
 
+        # Process frame and get focus status (this also stores annotated frame)
         is_focused = self.is_looking_at_screen(frame)
         self.update_focus_state(is_focused)
 
@@ -1230,7 +1231,16 @@ class EyeTrackingService:
             self.save_tracking_data()
 
         status = self.get_status()
+        
+        # Get the annotated frame as base64 (will use latest_frame stored by is_looking_at_screen)
         frame_data = self.get_current_frame_base64()
+        
+        # Debug: Log if frame_data is None
+        if frame_data is None:
+            logger.warning("⚠️ No frame data available after processing")
+        else:
+            logger.debug(f"✅ Returning frame data (length: {len(frame_data)})")
+        
         return status, frame_data
     
     def get_current_frame_base64(self):
