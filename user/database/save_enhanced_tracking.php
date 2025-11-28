@@ -1,4 +1,17 @@
 <?php
+/**
+ * Eye Tracking Data Save Endpoint
+ * 
+ * This is the single HTTP entry point for eye-tracking metrics from the Python service.
+ * The Python service POSTs tracking data to this endpoint, which then uses the
+ * centralized database connection (db_connection.php) to persist the data.
+ * 
+ * Railway/PaaS Deployment:
+ * - Ensure TRACKING_SAVE_URL in Python service points to this endpoint
+ * - This endpoint must be reachable over HTTP from the Python service
+ * - Database credentials are configured via environment variables in db_connection.php
+ */
+
 session_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -11,12 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Database connection
-require_once '../../config.php';
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
 
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $conn = getPDOConnection();
 } catch(PDOException $e) {
     echo json_encode([
         'success' => false,
@@ -87,14 +99,29 @@ try {
     
     $record_id = $conn->lastInsertId();
     
-    // Also update user progress for module completion tracking
+    // // Also update user progress for module completion tracking
+    // if (isset($data['module_id']) && $data['total_time'] > 0) {
+    //     $progress_sql = "
+    //         INSERT INTO user_progress (user_id, module_id, time_spent, last_accessed)
+    //         VALUES (?, ?, ?, NOW())
+    //         ON DUPLICATE KEY UPDATE
+    //         time_spent = time_spent + VALUES(time_spent),
+    //         last_accessed = VALUES(last_accessed)
+    //     ";
+        
+    //     $progress_stmt = $conn->prepare($progress_sql);
+    //     $progress_stmt->execute([
+    //         $data['user_id'],
+    //         $data['module_id'],
+    //         $total_time_seconds  // Also in seconds for consistency
+    //     ]);
+    // }
+    
+      // Also update user progress for module completion tracking
     if (isset($data['module_id']) && $data['total_time'] > 0) {
         $progress_sql = "
-            INSERT INTO user_progress (user_id, module_id, time_spent, last_accessed)
+            INSERT INTO user_progress (user_id, module_id, completion_percentage, last_accessed)
             VALUES (?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE
-            time_spent = time_spent + VALUES(time_spent),
-            last_accessed = VALUES(last_accessed)
         ";
         
         $progress_stmt = $conn->prepare($progress_sql);
@@ -104,7 +131,6 @@ try {
             $total_time_seconds  // Also in seconds for consistency
         ]);
     }
-    
     echo json_encode([
         'success' => true,
         'message' => "Eye tracking data saved successfully",

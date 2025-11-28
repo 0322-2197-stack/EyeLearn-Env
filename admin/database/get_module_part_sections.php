@@ -1,68 +1,81 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] != 1 || $_SESSION['role'] !== 'admin') {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
-    exit;
-}
-
-if (!isset($_GET['part_id']) || !is_numeric($_GET['part_id'])) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Invalid module part ID']);
-    exit;
-}
-
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Database connection error']);
-    exit;
-}
-
-$part_id = (int) $_GET['part_id'];
-
-// Get sections for this module part
-$sections_query = "SELECT id, subtitle, content, has_quiz FROM module_sections WHERE module_part_id = ? ORDER BY section_order";
-$sections_stmt = $conn->prepare($sections_query);
-$sections_stmt->bind_param("i", $part_id);
-$sections_stmt->execute();
-$sections_result = $sections_stmt->get_result();
-
-$sections = [];
-while ($section = $sections_result->fetch_assoc()) {
-    // Get quiz questions for this section if it has a quiz
-    $section['quiz_questions'] = [];
-    if ($section['has_quiz']) {
-        $questions_query = "SELECT id, question_text, option1, option2, option3, option4, correct_answer 
-                           FROM section_quiz_questions 
-                           WHERE section_id = ? 
-                           ORDER BY question_order";
-        $questions_stmt = $conn->prepare($questions_query);
-        $questions_stmt->bind_param("i", $section['id']);
-        $questions_stmt->execute();
-        $questions_result = $questions_stmt->get_result();
-        
-        while ($question = $questions_result->fetch_assoc()) {
-            $section['quiz_questions'][] = [
-                'id' => $question['id'],
-                'question_text' => $question['question_text'],
-                'options' => [
-                    $question['option1'],
-                    $question['option2'],
-                    $question['option3'],
-                    $question['option4']
-                ],
-                'correct_answer' => $question['correct_answer']
-            ];
-        }
-        $questions_stmt->close();
-    }
-    $sections[] = $section;
-}
-
-$sections_stmt->close();
-$conn->close();
-
 header('Content-Type: application/json');
-echo json_encode($sections);
+
+// Verify user is admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+    exit;
+}
+
+if (!isset($_GET['part_id'])) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Missing part_id']);
+    exit;
+}
+
+$part_id = (int)$_GET['part_id'];
+
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Database connection failed']);
+    exit;
+}
+
+try {
+    // Fetch sections for this module part
+    $stmt = $conn->prepare("SELECT id, subtitle, content FROM module_sections WHERE module_part_id = ? ORDER BY id ASC");
+    $stmt->bind_param("i", $part_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $sections = [];
+    while ($row = $result->fetch_assoc()) {
+        $section = [
+            'id' => (int)$row['id'],
+            'subtitle' => htmlspecialchars($row['subtitle'], ENT_QUOTES, 'UTF-8'),
+            // Keep content raw - don't htmlspecialchars it since it contains HTML/images
+            'content' => $row['content'],
+            'has_subquiz' => 0,
+            'quiz_questions' => []
+        ];
+        
+        // Fetch quiz questions for this section if they exist
+        $quiz_stmt = $conn->prepare("SELECT id, question_text, option1, option2, option3, option4, correct_answer FROM section_quiz_questions WHERE section_id = ? ORDER BY id ASC");
+        $quiz_stmt->bind_param("i", $row['id']);
+        $quiz_stmt->execute();
+        $quiz_result = $quiz_stmt->get_result();
+        
+        if ($quiz_result->num_rows > 0) {
+            $section['has_subquiz'] = 1;
+            while ($quiz_row = $quiz_result->fetch_assoc()) {
+                $section['quiz_questions'][] = [
+                    'id' => (int)$quiz_row['id'],
+                    'question_text' => htmlspecialchars($quiz_row['question_text'], ENT_QUOTES, 'UTF-8'),
+                    'option1' => htmlspecialchars($quiz_row['option1'], ENT_QUOTES, 'UTF-8'),
+                    'option2' => htmlspecialchars($quiz_row['option2'], ENT_QUOTES, 'UTF-8'),
+                    'option3' => htmlspecialchars($quiz_row['option3'], ENT_QUOTES, 'UTF-8'),
+                    'option4' => htmlspecialchars($quiz_row['option4'], ENT_QUOTES, 'UTF-8'),
+                    'correct_answer' => (int)$quiz_row['correct_answer']
+                ];
+            }
+        }
+        $quiz_stmt->close();
+        
+        $sections[] = $section;
+    }
+    $stmt->close();
+    
+    echo json_encode($sections);
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+} finally {
+    $conn->close();
+}
 ?>

@@ -6,8 +6,11 @@ if (!isset($_SESSION['user_id'])) {
 
 header('Content-Type: application/json');
 
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
     die(json_encode(['error' => 'Connection failed']));
 }
 
@@ -21,7 +24,7 @@ $query = "
         fq.created_at
     FROM final_quizzes fq
     JOIN modules m ON fq.module_id = m.id
-    LEFT JOIN quiz_questions qq ON fq.id = qq.quiz_id
+    LEFT JOIN final_quiz_questions qq ON fq.id = qq.quiz_id
     GROUP BY fq.id
     ORDER BY fq.created_at DESC
 ";

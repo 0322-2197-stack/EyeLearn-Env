@@ -227,6 +227,9 @@ class CVEyeTrackingSystem {
                 module_id: this.moduleId,
                 section_id: this.sectionId,
                 session_time: Math.floor(this.timers.sessionTime || 0),
+                completion_percentage: typeof currentCompletionPercentage !== 'undefined'
+                ? currentCompletionPercentage
+                : 0,
                 focus_data: {
                     focused_time: Math.floor(this.timers.focusedTime || 0),
                     unfocused_time: Math.floor(this.timers.unfocusedTime || 0),

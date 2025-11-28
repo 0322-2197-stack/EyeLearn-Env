@@ -5,10 +5,9 @@ session_start();
 // Check if user is admin (you may need to adjust this based on your admin authentication)
 // For now, we'll check if they're logged in as an admin
 
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+// Use centralized database connection
+require_once __DIR__ . '/../database/db_connection.php';
+$conn = getMysqliConnection();
 
 // Get analytics data with tracking type
 $analytics_query = "

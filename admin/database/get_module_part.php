@@ -12,7 +12,9 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     exit;
 }
 
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+$conn = getMysqliConnection();
 if ($conn->connect_error) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Database connection error']);

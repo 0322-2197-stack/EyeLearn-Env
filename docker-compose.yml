@@ -9,11 +9,31 @@ services:
       - .:/var/www/html
     depends_on:
       - db
+      - python_service
     environment:
       - DB_HOST=db
       - DB_NAME=elearn_db
       - DB_USER=root
       - DB_PASS=rootpassword
+
+  python_service:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    command: ["python", "python_services/eye_tracking_service.py"]
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    # Camera access configuration
+    # For Linux: Uncomment the devices line below
+    # For Windows: Camera access in Docker is limited - use run_python_service.bat for local dev
+    # For production deployment: Configure based on your server environment
+    # devices:
+    #   - /dev/video0:/dev/video0
+    environment:
+      - CAMERA_ENABLED=${CAMERA_ENABLED:-true}
+    restart: always
 
   db:
     image: mysql:8.0

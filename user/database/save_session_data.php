@@ -16,8 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Database connection failed']);
     exit();
@@ -91,6 +94,27 @@ try {
         );
         
         $stmt->execute(); // Don't fail if analytics insert fails
+    }
+    
+    if ($module_id) {
+        // You can adjust how completion is calculated. For now, use session_time heuristics:
+            $completion_percentage = isset($input['completion_percentage'])
+            ? floatval($input['completion_percentage'])
+            : 0;
+      
+
+        $progress_sql = "
+            INSERT INTO user_progress 
+            (user_id, module_id, completion_percentage, last_accessed)
+            VALUES (?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE
+                completion_percentage = GREATEST(completion_percentage, VALUES(completion_percentage)),
+                last_accessed = NOW()
+        ";
+
+        $stmt = $conn->prepare($progress_sql);
+        $stmt->bind_param('iid', $user_id, $module_id, $completion_percentage);
+        $stmt->execute(); // Don't fail entire request if this fails
     }
 
     echo json_encode([

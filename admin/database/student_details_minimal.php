@@ -10,9 +10,11 @@ if (!$student_id) {
     exit();
 }
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => 'Database connection failed']);
     exit();
 }

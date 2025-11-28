@@ -8,11 +8,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['module_id'])) {
     $moduleId = $_POST['module_id'];
 
-    // Connect to the database
-    $conn = new mysqli('localhost', 'root', '', 'elearn_db');
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
+    // Use centralized database connection
+    require_once __DIR__ . '/../../database/db_connection.php';
+    $conn = getMysqliConnection();
 
     // Update the module's status to "published"
     $stmt = $conn->prepare("UPDATE modules SET status = 'published' WHERE id = ?");

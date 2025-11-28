@@ -42,9 +42,9 @@
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.4",
-    "@tailwindcss/vite": "^4.1.1",
-    "tailwindcss": "^4.1.4",
-    "chart.js": "^4.4.0"
+    "@tailwindcss/vite": "^4.1.17",
+    "chart.js": "^4.4.0",
+    "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
     "eslint": "^8.0.0",
@@ -78,11 +78,19 @@
     "flask_version": "2.3.0+"
   },
   "system_requirements": {
-    "os": ["Windows 10+", "macOS 10.14+", "Ubuntu 18.04+"],
+    "os": [
+      "Windows 10+",
+      "macOS 10.14+",
+      "Ubuntu 18.04+"
+    ],
     "ram": "4GB minimum, 8GB recommended",
     "storage": "2GB free space",
     "camera": "720p webcam (built-in or USB)",
-    "browser": ["Chrome 80+", "Firefox 75+", "Edge 80+"]
+    "browser": [
+      "Chrome 80+",
+      "Firefox 75+",
+      "Edge 80+"
+    ]
   },
   "services": {
     "web_server": {

@@ -5,11 +5,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] != 1 || $_SESSION['role
     exit;
 }
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+$conn = getMysqliConnection();
 
 // Process form submission for adding a new module part
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['module_id'])) {

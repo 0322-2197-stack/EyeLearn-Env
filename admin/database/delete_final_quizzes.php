@@ -6,9 +6,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] != 1 || $_SESSION['role
     exit;
 }
 
-// Connect to database
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit;

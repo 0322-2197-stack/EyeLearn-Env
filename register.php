@@ -11,9 +11,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
     $confirmPassword = $_POST['confirm_password'];
     $gender = $_POST['gender'];
+    $section = trim($_POST['section']);
     
     // Validate inputs
-    if (empty($firstName) || empty($lastName) || empty($email) || empty($password) || empty($gender)) {
+    if (empty($firstName) || empty($lastName) || empty($email) || empty($password) || empty($gender) || empty($section)) {
         $error = 'Please fill in all required fields';
     } elseif ($password !== $confirmPassword) {
         $error = 'Passwords do not match';
@@ -27,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Email is already registered';
         } else {
             // Register user (only as student)
-            if (registerUser($firstName, $lastName, $email, $password, $gender, $pdo)) {
+            if (registerUser($firstName, $lastName, $email, $password, $gender, $section, $pdo)) {
                 // Set success message and redirect to login page
                 $_SESSION['registration_success'] = 'Registration successful! You can now log in.';
                 header('Location: loginpage.php');
@@ -114,6 +115,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     
                     <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="section">
+                            Section
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-users text-gray-400"></i>
+                            </div>
+                            <select class="appearance-none border rounded-lg w-full py-3 px-4 pl-10 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary bg-white" 
+                                    id="section" name="section" required>
+                                <option value="">Select Section</option>
+                                <option value="BSINFO-1A">BSINFO-1A</option>
+                                <option value="BSINFO-1B">BSINFO-1B</option>
+                                <option value="BSINFO-1C">BSINFO-1C</option>
+                            </select>
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
                         <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
                             Password
                         </label>
@@ -150,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="mb-4">
                         <label class="block text-gray-700 text-sm font-bold mb-2">
                             Gender
                         </label>

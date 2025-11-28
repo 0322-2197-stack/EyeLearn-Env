@@ -5,10 +5,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     exit;
 }
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
-    $_SESSION['error'] = "Database connection failed: " . $conn->connect_error;
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
+    $_SESSION['error'] = "Database connection failed: " . $e->getMessage();
     header("Location: ../Amodule.php");
     exit;
 }
@@ -29,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_module'])) {
 
     // Handle file upload
     if (isset($_FILES['module_image']) && $_FILES['module_image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = __DIR__ . '/../../modulephotoshow/'; // Changed to modulephotoshow
+        $uploadDir = __DIR__ . '/../../modulephotoshow/';
         
         // Create directory if it doesn't exist
         if (!file_exists($uploadDir)) {
@@ -40,9 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_module'])) {
             }
         }
 
-        // Validate file
+        // Validate file using finfo for MIME type
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $fileType = finfo_file($finfo, $_FILES['module_image']['tmp_name']);
+        finfo_close($finfo);
+        
         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        $fileType = mime_content_type($_FILES['module_image']['tmp_name']);
         
         if (!in_array($fileType, $allowedTypes)) {
             $_SESSION['error'] = "Only JPG, PNG, GIF, or WEBP images are allowed";
@@ -50,14 +55,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_module'])) {
             exit;
         }
 
-        // Generate unique filename
-        $fileExt = pathinfo($_FILES['module_image']['name'], PATHINFO_EXTENSION);
-        $filename = uniqid('module_') . '.' . $fileExt;
+        // Generate unique filename with proper sanitization
+        $fileExt = strtolower(pathinfo($_FILES['module_image']['name'], PATHINFO_EXTENSION));
+        $filename = 'module_' . time() . '_' . bin2hex(random_bytes(8)) . '.' . $fileExt;
         $targetPath = $uploadDir . $filename;
 
         // Move the uploaded file
         if (move_uploaded_file($_FILES['module_image']['tmp_name'], $targetPath)) {
-            $imagePath = '../modulephotoshow/' . $filename; // Updated path
+            // Use absolute path from web root
+            $imagePath = '/capstone/modulephotoshow/' . $filename;
+            
+            // Set proper permissions
+            chmod($targetPath, 0644);
         } else {
             $_SESSION['error'] = "Error uploading file to modulephotoshow";
             header("Location: ../Amodule.php");

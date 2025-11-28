@@ -1,12 +1,9 @@
 <?php
-$host = 'localhost';
-$dbname = 'elearn_db';
-$username = 'root';
-$password = '';
+// Use centralized database connection
+require_once __DIR__ . '/database/db_connection.php';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = getPDOConnection();
 } catch (PDOException $e) {
     die("Connection failed: " . $e->getMessage());
 }
@@ -19,7 +16,7 @@ function userExists($email, $pdo) {
 }
 
 // Function to register new user (only for students)
-function registerUser($firstName, $lastName, $email, $password, $gender, $pdo) {
+function registerUser($firstName, $lastName, $email, $password, $gender, $section, $pdo) {
     // Validate email format - only allow student emails
     if (preg_match('/@admin\.eyelearn$/', $email)) {
         return false; // Prevent registration of admin emails
@@ -27,9 +24,9 @@ function registerUser($firstName, $lastName, $email, $password, $gender, $pdo) {
     
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
     
-    $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password, gender, role, created_at) 
-                          VALUES (?, ?, ?, ?, ?, 'student', NOW())");
-    return $stmt->execute([$firstName, $lastName, $email, $hashedPassword, $gender]);
+    $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password, gender, section, role, created_at) 
+                          VALUES (?, ?, ?, ?, ?, ?, 'student', NOW())");
+    return $stmt->execute([$firstName, $lastName, $email, $hashedPassword, $gender, $section]);
 }
 
 

@@ -1,16 +1,51 @@
 <?php
 // Environment-specific configuration for EyeLearn
 
-// Detect environment
-$environment = 'production'; // Change to 'development' for local testing
+// Auto-detect environment based on server hostname
+// This safely defaults to 'development' on localhost
+if (!function_exists('detectEnvironment')) {
+function detectEnvironment() {
+    // Check if explicitly set via environment variable (for production deployments)
+    if (isset($_ENV['APP_ENV'])) {
+        return $_ENV['APP_ENV'];
+    }
+    
+    // Check if explicitly set via constant
+    if (defined('APP_ENVIRONMENT')) {
+        return constant('APP_ENVIRONMENT');
+    }
+    
+    // Auto-detect: if localhost or 127.0.0.1, use development
+    $hostname = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 
+                (isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'localhost');
+    
+    // Also check SERVER_ADDR for CLI scripts
+    $server_addr = isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '127.0.0.1';
+    
+    // Development indicators
+    $is_localhost = (
+        $hostname === 'localhost' ||
+        $hostname === '127.0.0.1' ||
+        strpos($hostname, 'localhost') !== false ||
+        strpos($hostname, '127.0.0.1') !== false ||
+        $server_addr === '127.0.0.1' ||
+        $server_addr === '::1'
+    );
+    
+    return $is_localhost ? 'development' : 'production';
+}
+} // End function_exists check
+
+// Detect environment (safe default: development on localhost)
+$environment = detectEnvironment();
 
 if ($environment === 'development') {
     // Development settings
     $config = [
-        'db_host' => 'localhost',
-        'db_user' => 'root',
-        'db_pass' => '',
-        'db_name' => 'elearn_db',
+        'db_host' => getenv('DB_HOST') ?: 'localhost', // Use Docker env var if set
+        'db_user' => getenv('DB_USER') ?: 'root',
+        'db_pass' => getenv('DB_PASS') ?: '',
+        'db_name' => getenv('DB_NAME') ?: 'elearn_db',
         'debug' => true,
         'error_reporting' => E_ALL,
         'display_errors' => 1,
@@ -18,12 +53,12 @@ if ($environment === 'development') {
         'python_service_url' => 'http://localhost:5000'
     ];
 } else {
-    // Production settings
+    // Production settings - prioritize environment variables (for Docker/Railway deployments)
     $config = [
-        'db_host' => 'localhost', // Your production DB host
-        'db_user' => 'eyellearn_user', // Your production DB user
-        'db_pass' => 'your_secure_password', // Your production DB password
-        'db_name' => 'elearn_db',
+        'db_host' => getenv('DB_HOST') ?: 'localhost', // Use Docker env var if set
+        'db_user' => getenv('DB_USER') ?: 'eyellearn_user', // Your production DB user
+        'db_pass' => getenv('DB_PASS') ?: 'your_secure_password', // Your production DB password
+        'db_name' => getenv('DB_NAME') ?: 'elearn_db',
         'debug' => false,
         'error_reporting' => 0,
         'display_errors' => 0,
@@ -41,25 +76,12 @@ if ($config['debug']) {
     ini_set('display_errors', 0);
 }
 
-// Database connection
+// Database connection - use centralized connection
+if (!function_exists('getDBConnection')) {
 function getDBConnection() {
-    global $config;
-    $conn = new mysqli(
-        $config['db_host'],
-        $config['db_user'],
-        $config['db_pass'],
-        $config['db_name']
-    );
-    
-    if ($conn->connect_error) {
-        if ($config['debug']) {
-            die("Connection failed: " . $conn->connect_error);
-        } else {
-            die("Database connection error");
-        }
-    }
-    
-    return $conn;
+    require_once __DIR__ . '/database/db_connection.php';
+    return getMysqliConnection();
+}
 }
 
 // Export config for use in other files

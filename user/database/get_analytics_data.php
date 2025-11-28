@@ -9,8 +9,11 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
+// Use centralized database connection
+require_once __DIR__ . '/../../database/db_connection.php';
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Database connection failed']);
     exit();

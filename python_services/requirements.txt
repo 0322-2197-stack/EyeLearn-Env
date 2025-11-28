@@ -24,7 +24,6 @@ pandas>=1.5.0,<3.0.0                  # Data analysis (optional, for advanced an
 scipy>=1.10.0,<2.0.0                  # Scientific computing (optional)
 
 # Threading and Async Support
-threading-manager>=1.0.0              # Enhanced threading utilities (if available)
 
 # Development and Debugging (optional)
 matplotlib>=3.6.0,<4.0.0              # Plotting (for debugging/visualization)
@@ -32,7 +31,6 @@ seaborn>=0.12.0,<1.0.0                # Statistical plotting (optional)
 
 # System and Platform Detection
 psutil>=5.9.0                         # System monitoring
-platform-detector>=1.0.0             # Platform detection (if available)
 
 # Additional Utilities
 python-dotenv>=1.0.0                  # Environment variable management

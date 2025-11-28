@@ -5,6 +5,7 @@ Features: 3-second countdown, real-time monitoring, focus/unfocus detection
 
 import cv2
 import json
+import os
 import time
 import threading
 import requests
@@ -18,6 +19,16 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import logging
+
+# Configuration via environment variables (backward compatible)
+TRACKING_SAVE_URL = os.environ.get(
+    "TRACKING_SAVE_URL",
+    "http://localhost/capstone/user/database/save_enhanced_tracking.php"
+)
+
+# Camera enabled flag (defaults to enabled for backward compatibility)
+CAMERA_ENABLED_STR = os.environ.get("CAMERA_ENABLED", "1").lower()
+CAMERA_ENABLED = CAMERA_ENABLED_STR not in ("0", "false", "False")
 
 # Custom JSON encoder for NumPy types
 class NumpyEncoder(json.JSONEncoder):
@@ -449,6 +460,13 @@ class EyeTrackingService:
     def start_webcam(self):
         """Start the webcam for eye tracking with improved detection"""
         try:
+            # Check if camera is disabled via environment variable
+            if not CAMERA_ENABLED:
+                logger.info("📹 Camera disabled via CAMERA_ENABLED environment variable - using fallback mode")
+                self.camera_initialized = False
+                self.webcam = None
+                return False
+            
             # Check if camera is already initialized and working
             if self.camera_initialized and self.webcam is not None and self.webcam.isOpened():
                 logger.info("📹 Camera already initialized and working - skipping reinitialization")
@@ -594,7 +612,7 @@ class EyeTrackingService:
                 annotated_frame = self.add_tracking_overlay(annotated_frame)
                 with self.frame_lock:
                     self.latest_frame = annotated_frame.copy()
-                    logger.info(f"🖼️ Stored annotated frame - shape: {annotated_frame.shape}")
+                    logger.debug(f"🖼️ Stored annotated frame - shape: {annotated_frame.shape}")
             else:
                 logger.warning("❌ No annotated frame returned from gaze tracker")
         except Exception as e:
@@ -913,9 +931,9 @@ class EyeTrackingService:
             logger.info(f"Tracking Data: User {data['user_id']}, Module {data['module_id']}, Focus: {data['focused_time']:.1f}s ({data['focus_percentage']:.1f}%)")
             
             try:
-                # Save to database
+                # Save to database using configurable URL
                 response = requests.post(
-                    'http://localhost/capstone/user/database/save_enhanced_tracking.php',
+                    TRACKING_SAVE_URL,
                     json=data,
                     timeout=5
                 )
@@ -1158,11 +1176,11 @@ class EyeTrackingService:
                 if self.latest_frame is not None:
                     # Always use the latest frame if available (this includes annotated camera frames)
                     frame_to_use = self.latest_frame.copy()
-                    logger.info(f"📹 Providing live camera frame - shape: {frame_to_use.shape}")
+                    logger.debug(f"📹 Providing live camera frame - shape: {frame_to_use.shape}")
                 else:
                     # Only create status frame if no camera frame exists
                     frame_to_use = self.create_status_frame()
-                    logger.info(f"📺 Providing status frame - tracking state: {self.tracking_state}")
+                    logger.debug(f"📺 Providing status frame - tracking state: {self.tracking_state}")
                 
                 if frame_to_use is not None:
                     # Ensure frame has proper dimensions
@@ -1182,7 +1200,7 @@ class EyeTrackingService:
                             # Convert to base64
                             frame_base64 = base64.b64encode(buffer).decode('utf-8')
                             data_url = f"data:image/jpeg;base64,{frame_base64}"
-                            logger.info(f"✅ Frame encoded successfully - data URL length: {len(data_url)}")
+                            logger.debug(f"✅ Frame encoded successfully - data URL length: {len(data_url)}")
                             return data_url
                         else:
                             logger.error("❌ Failed to encode frame as JPEG")
@@ -1232,6 +1250,10 @@ eye_tracker = EyeTrackingService()
 # Simple rate limiting to prevent camera conflicts
 last_frame_request = 0
 frame_request_interval = 0.033  # ~30 FPS (33ms between frame requests)
+
+@app.route('/status', methods=['GET'])
+def status():
+    return {"status": "ok", "service": "eye_tracking", "message": "running"}, 200
 
 @app.route('/api/start_tracking', methods=['POST'])
 def start_tracking():
@@ -1558,5 +1580,36 @@ if __name__ == '__main__':
     logger.info("Starting Enhanced Eye Tracking Service v2.0...")
     logger.info("Features: Real camera with focus detection zones, 3-second countdown, continuous operation")
     
+    # Read PORT from environment (for Railway/PaaS deployment) or default to 5000
+    PORT = int(os.environ.get("PORT", 5000))
+    
     # Run the Flask app
-    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
+    # Use 0.0.0.0 for PaaS deployment, but still works locally
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
+
+# ============================================================================
+# DEPENDENCIES AND DEPLOYMENT NOTES
+# ============================================================================
+# 
+# Required Python packages:
+#   - Flask (web framework)
+#   - flask-cors (CORS support)
+#   - opencv-python (computer vision and camera access)
+#   - mediapipe (face mesh and eye tracking)
+#   - numpy (numerical operations)
+#   - requests (HTTP client for backend communication)
+# 
+# Environment Variables:
+#   - PORT: Server port (default: 5000)
+#   - TRACKING_SAVE_URL: Backend endpoint for saving tracking data
+#     (default: http://localhost/capstone/user/database/save_enhanced_tracking.php)
+#   - CAMERA_ENABLED: Enable/disable camera (set to "0", "false", or "False" to disable)
+#     (default: enabled)
+# 
+# Railway/PaaS Deployment:
+#   Example start command: python eye_tracking_service.py
+#   Railway will automatically set PORT environment variable
+#   Set CAMERA_ENABLED=0 if deploying without physical camera access
+#   Set TRACKING_SAVE_URL to your production backend endpoint
+# 
+# ============================================================================
