@@ -4,6 +4,8 @@
 [variables]
 # Disable server-side camera (Railway has no camera hardware)
 CAMERA_ENABLED = "false"
+# Set library path for OpenCV to find libGL
+LD_LIBRARY_PATH = "/nix/store/*-libglvnd-*/lib:/nix/store/*-glib-*/lib:/nix/store/*-gcc-*/lib:$LD_LIBRARY_PATH"
 
 [phases.setup]
 # Install system dependencies required by OpenCV, MediaPipe, and other CV libraries
