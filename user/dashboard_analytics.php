@@ -1,17 +1,28 @@
 <?php
 function getWeeklyFocusScore($conn, $user_id) {
+    // Use eye_tracking_analytics instead of user_study_sessions
     $query = "SELECT 
-        AVG(focus_score) as avg_focus,
+        AVG(focus_percentage) as avg_focus,
         AVG(CASE 
             WHEN date >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY) 
             AND date < DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)
-            THEN focus_score 
+            THEN focus_percentage 
             END) as last_week_focus
-        FROM user_study_sessions 
+        FROM eye_tracking_analytics 
         WHERE user_id = ? 
         AND date >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY)";
     
     $stmt = $conn->prepare($query);
+    
+    // Check if prepare() failed
+    if ($stmt === false) {
+        error_log("Failed to prepare query in getWeeklyFocusScore: " . $conn->error);
+        return [
+            'current_score' => 0,
+            'previous_score' => 0
+        ];
+    }
+    
     $stmt->bind_param('i', $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -23,16 +34,26 @@ function getWeeklyFocusScore($conn, $user_id) {
     ];
 }
 
+
 function getComprehensionLevel($conn, $user_id) {
+    // Use module_completions table instead of quiz_results
     $query = "SELECT 
-        AVG(score) as avg_score,
+        AVG(final_quiz_score) as avg_score,
         COUNT(*) as total_assessments,
         MAX(completion_date) as latest_assessment
-        FROM quiz_results 
+        FROM module_completions 
         WHERE user_id = ? 
-        AND completion_date >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)";
+        AND completion_date >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+        AND final_quiz_score IS NOT NULL";
     
     $stmt = $conn->prepare($query);
+    
+    // Check if prepare() failed
+    if ($stmt === false) {
+        error_log("Failed to prepare query in getComprehensionLevel: " . $conn->error);
+        return ['level' => 'Beginner', 'percentage' => 50];
+    }
+    
     $stmt->bind_param('i', $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -51,3 +72,4 @@ function getComprehensionLevel($conn, $user_id) {
         return ['level' => 'Beginner', 'percentage' => 50];
     }
 }
+
