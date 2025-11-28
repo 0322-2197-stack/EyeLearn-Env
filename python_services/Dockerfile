@@ -34,5 +34,6 @@ EXPOSE $PORT
 
 # Use uvicorn to run FastAPI service
 # Railway will override PORT via environment variable
-CMD uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
+# Using python -m uvicorn ensures it uses the installed package
+CMD python -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
 

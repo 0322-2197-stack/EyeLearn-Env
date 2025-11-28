@@ -5,7 +5,7 @@
         "dockerfilePath": "Dockerfile"
     },
     "deploy": {
-        "startCommand": "uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1",
+        "startCommand": "python -m uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1",
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 10
     }

@@ -26,4 +26,4 @@ cmds = [
 
 [start]
 # Start the FastAPI eye tracking service using uvicorn and PORT variable from Railway
-cmd = "/opt/venv/bin/uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1"
+cmd = "/opt/venv/bin/python -m uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1"
