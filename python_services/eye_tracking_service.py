@@ -952,7 +952,7 @@ class EyeTrackingService:
                 'focus_percentage': metrics['focus_percentage'],
                 'focus_sessions': metrics['focus_sessions'],
                 'unfocus_sessions': metrics['unfocus_sessions'],
-                'session_type': 'enhanced_cv_tracking',
+                'session_type': 'viewing',
                 'timestamp': datetime.now().isoformat()
             }
             
