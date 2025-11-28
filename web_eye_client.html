@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Browser Eye Tracking Stream</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark light;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #111;
+        color: #f8f8f8;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      video,
+      canvas {
+        max-width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin: 1rem 0 2rem;
+      }
+      button {
+        padding: 0.6rem 1.2rem;
+        border-radius: 999px;
+        border: 0;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #status {
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+      pre {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 1rem;
+        border-radius: 8px;
+        overflow: auto;
+        max-height: 320px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Browser Eye Tracking Stream</h1>
+      <p>
+        This demo requests webcam access in the browser, samples frames at a safe FPS, and streams them to
+        the Railway FastAPI backend without ever exposing camera hardware to Railway.
+      </p>
+
+      <div class="controls">
+        <button id="startBtn">Start Stream</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <span id="status">idle</span>
+      </div>
+
+      <video id="preview" playsinline autoplay muted></video>
+      <canvas id="frameCanvas" width="640" height="360" hidden></canvas>
+
+      <h2>Latest backend response</h2>
+      <pre id="log">No data yet.</pre>
+    </main>
+
+    <script>
+      const API_URL =
+        window.PYTHON_SERVICE_URL || "https://resilient-magic-production-2e23.up.railway.app";
+      const CAPTURE_FPS = 7;
+      const FRAME_INTERVAL = 1000 / CAPTURE_FPS;
+      const state = {
+        mediaStream: null,
+        timer: null,
+        lastSend: 0,
+        controller: new AbortController(),
+        backoffMs: 0,
+      };
+
+      const els = {
+        start: document.getElementById("startBtn"),
+        stop: document.getElementById("stopBtn"),
+        preview: document.getElementById("preview"),
+        canvas: document.getElementById("frameCanvas"),
+        status: document.getElementById("status"),
+        log: document.getElementById("log"),
+      };
+      const ctx = els.canvas.getContext("2d");
+
+      async function requestCamera() {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera not supported in this browser");
+        }
+        state.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { width: 640, height: 360, frameRate: { max: CAPTURE_FPS } },
+        });
+        els.preview.srcObject = state.mediaStream;
+      }
+
+      function captureFrame() {
+        if (!state.mediaStream) return null;
+        const track = state.mediaStream.getVideoTracks()[0];
+        if (!track) return null;
+        const settings = track.getSettings();
+        els.canvas.width = settings.width || 640;
+        els.canvas.height = settings.height || 360;
+        ctx.drawImage(els.preview, 0, 0, els.canvas.width, els.canvas.height);
+        return els.canvas.toDataURL("image/jpeg", 0.7);
+      }
+
+      async function sendFrame() {
+        const now = performance.now();
+        if (now - state.lastSend < FRAME_INTERVAL) return;
+        state.lastSend = now;
+
+        const frame = captureFrame();
+        if (!frame) return;
+
+        const payload = {
+          user_id: window.currentUserId ?? null,
+          module_id: window.currentModuleId ?? null,
+          section_id: window.currentSectionId ?? null,
+          fps: CAPTURE_FPS,
+          frame_base64: frame,
+        };
+
+        try {
+          const response = await fetch(`${API_URL}/api/frames`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: state.controller.signal,
+          });
+          if (!response.ok) throw new Error(`Backend responded ${response.status}`);
+          const json = await response.json();
+          els.log.textContent = JSON.stringify(json, null, 2);
+          els.status.textContent = "streaming";
+          state.backoffMs = 0;
+        } catch (error) {
+          console.error(error);
+          handleBackendFailure(error);
+        }
+      }
+
+      function handleBackendFailure(err) {
+        els.status.textContent = `backend unreachable: ${err.message || err}`;
+        if (state.backoffMs === 0) state.backoffMs = 2000;
+        else state.backoffMs = Math.min(state.backoffMs * 2, 15000);
+        clearInterval(state.timer);
+        state.timer = setTimeout(() => {
+          state.timer = setInterval(sendFrame, FRAME_INTERVAL);
+        }, state.backoffMs);
+      }
+
+      async function startStreaming() {
+        try {
+          await requestCamera();
+        } catch (error) {
+          els.status.textContent = `camera error: ${error.message}`;
+          return;
+        }
+        state.controller = new AbortController();
+        els.start.disabled = true;
+        els.stop.disabled = false;
+        els.status.textContent = "initializing";
+        state.timer = setInterval(sendFrame, FRAME_INTERVAL);
+      }
+
+      function stopStreaming() {
+        state.controller.abort("user stopped");
+        clearInterval(state.timer);
+        state.timer = null;
+        state.lastSend = 0;
+        if (state.mediaStream) {
+          state.mediaStream.getTracks().forEach((track) => track.stop());
+          state.mediaStream = null;
+        }
+        els.preview.srcObject = null;
+        els.start.disabled = false;
+        els.stop.disabled = true;
+        els.status.textContent = "idle";
+      }
+
+      els.start.addEventListener("click", startStreaming);
+      els.stop.addEventListener("click", stopStreaming);
+      window.addEventListener("beforeunload", stopStreaming);
+    </script>
+  </body>
+</html>
+
