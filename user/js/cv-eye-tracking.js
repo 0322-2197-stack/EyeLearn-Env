@@ -2269,7 +2269,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             console.log('ℹ️ No module ID found in URL parameters');
         }
     } catch (error) {
-       
         console.error('❌ Error initializing CV eye tracking:', error);
     }
 });
