@@ -11,6 +11,12 @@
  *   $conn = getMysqliConnection();
  */
 
+// Load environment variables from .env file
+if (file_exists(__DIR__ . '/../user/load_env.php')) {
+    require_once __DIR__ . '/../user/load_env.php';
+}
+
+
 // Database configuration
 // Read from environment variables (for Railway/PaaS deployment) with local defaults
 $db_config = [

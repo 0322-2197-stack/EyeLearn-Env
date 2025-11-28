@@ -11,16 +11,18 @@ services:
       - db
       - python_service
     environment:
-      - DB_HOST=db
-      - DB_NAME=elearn_db
-      - DB_USER=root
-      - DB_PASS=rootpassword
+      - DB_HOST=${DB_HOST:-db}
+      - DB_NAME=${DB_NAME:-elearn_db}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASS=${DB_PASS:-rootpassword}
+      - DB_PORT=${DB_PORT:-3306}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
   python_service:
     build:
       context: .
       dockerfile: python.Dockerfile
-    command: ["python", "python_services/eye_tracking_service.py"]
+    command: [ "python", "python_services/eye_tracking_service.py" ]
     ports:
       - "5000:5000"
     volumes:
