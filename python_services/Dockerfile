@@ -26,6 +26,11 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Verify Python installation and ensure it's accessible
+RUN python --version && \
+    which python && \
+    python -c "import sys; print(f'Python executable: {sys.executable}')"
+
 # Copy the rest of the application files
 COPY . .
 
@@ -35,8 +40,9 @@ RUN chmod +x start.sh || true
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Use python directly (python3.12-slim uses 'python' not 'python3')
+# Use full path to Python executable to ensure it's found
 # Railway will override PORT via environment variable
 # Using shell form to allow PORT variable substitution
-CMD ["/bin/bash", "-c", "python -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# In python:3.12-slim, Python is at /usr/local/bin/python
+CMD ["/bin/sh", "-c", "/usr/local/bin/python -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
 
