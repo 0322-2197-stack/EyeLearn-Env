@@ -117,6 +117,17 @@ class CVEyeTrackingSystem {
         }
     }
 
+    getWidgetVideoElement() {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        const scopedVideo = document.querySelector('#cv-eye-tracking-interface #tracking-video');
+        if (scopedVideo) {
+            return scopedVideo;
+        }
+        return document.getElementById('tracking-video');
+    }
+
     async init() {
         console.log(`🎯 Initializing Enhanced CV Eye Tracking System v2.5... (Instance: ${this.instanceId})`);
         console.log('Features: Instant activation, seamless transitions, crash-resistant switching');
@@ -251,14 +262,22 @@ class CVEyeTrackingSystem {
                 audio: false
             });
             
-            const videoElement = document.getElementById('tracking-video');
+            const videoElement = this.getWidgetVideoElement();
             if (videoElement) {
                 videoElement.srcObject = this.cameraStream;
                 videoElement.muted = true;
                 videoElement.playsInline = true;
                 if (typeof videoElement.play === 'function') {
-                    videoElement.play().catch(() => {});
+                    const playPromise = videoElement.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {});
+                    }
                 }
+                videoElement.onloadedmetadata = () => {
+                    if (typeof videoElement.play === 'function') {
+                        videoElement.play().catch(() => {});
+                    }
+                };
             }
             
             this.captureCanvas = document.createElement('canvas');
@@ -315,7 +334,7 @@ class CVEyeTrackingSystem {
             return;
         }
         
-        const videoElement = document.getElementById('tracking-video');
+            const videoElement = this.getWidgetVideoElement();
         if (!videoElement || videoElement.readyState < 2) {
             return;
         }
@@ -1180,7 +1199,7 @@ class CVEyeTrackingSystem {
         
         // Verify the interface was created correctly
         setTimeout(() => {
-            const videoElement = document.getElementById('tracking-video');
+            const videoElement = this.getWidgetVideoElement();
             console.log('🔍 Interface verification:', {
                 container: !!document.getElementById('cv-eye-tracking-interface'),
                 videoElement: !!videoElement,
@@ -1190,7 +1209,7 @@ class CVEyeTrackingSystem {
         }, 100);
         
         if (useLocalVideo) {
-            const videoElement = document.getElementById('tracking-video');
+        const videoElement = this.getWidgetVideoElement();
             if (videoElement) {
                 videoElement.muted = true;
                 videoElement.playsInline = true;
@@ -1280,7 +1299,7 @@ class CVEyeTrackingSystem {
                 
                 // Use the EXACT same logic as the working test
                 if (data.hasFrame && data.frameData) {
-                    const videoElement = document.getElementById('tracking-video');
+                    const videoElement = this.getWidgetVideoElement();
                     if (videoElement) {
                         videoElement.src = data.frameData;
                         
@@ -1439,7 +1458,7 @@ class CVEyeTrackingSystem {
                     }
                     
                     // Also update the small video if it's visible
-                    const videoElement = document.getElementById('tracking-video');
+                    const videoElement = this.getWidgetVideoElement();
                     if (videoElement) {
                         videoElement.src = data.frameData;
                     }
