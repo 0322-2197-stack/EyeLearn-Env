@@ -514,7 +514,8 @@ async def receive_browser_frame(payload: FramePayload):
             section_id
         )
         
-        return {
+        # Convert numpy types before returning
+        return convert_numpy_types({
             "success": True,
             "frame_id": payload.frame_id,
             "user_id": user_id,
@@ -524,7 +525,7 @@ async def receive_browser_frame(payload: FramePayload):
             "status": status,
             "metrics": status.get("metrics") if isinstance(status, dict) else None,
             "current_frame": frame_data
-        }
+        })
     except HTTPException:
         raise
     except Exception as e:
