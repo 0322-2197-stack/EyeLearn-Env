@@ -118,7 +118,7 @@ try {
     $test_sql = "INSERT INTO eye_tracking_sessions 
                 (user_id, module_id, section_id, total_time_seconds, focused_time_seconds, 
                  unfocused_time_seconds, session_type, created_at, last_updated) 
-                VALUES (999, 999, 999, 10, 5, 5, 'test', NOW(), NOW())";
+                VALUES (999, 999, 999, 10, 5, 5, 'viewing', NOW(), NOW())";
     
     $pdo->exec($test_sql);
     echo "✓ Test write successful\n";

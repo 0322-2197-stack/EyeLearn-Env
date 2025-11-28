@@ -82,7 +82,7 @@ try {
         'focus_percentage' => $focus_percentage,
         'focus_sessions' => $data['focus_sessions'] ?? 0,
         'unfocus_sessions' => $data['unfocus_sessions'] ?? 0,
-        'session_type' => $data['session_type'] ?? 'enhanced_cv_tracking',
+        'session_type' => $data['session_type'] ?? 'viewing', // Using 'viewing' for Railway compatibility
         'timestamp' => date('Y-m-d H:i:s')
     ];
     
@@ -103,7 +103,7 @@ try {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
     ";
     
-    $session_type = $data['session_type'] ?? 'viewing'; // From Python service
+    $session_type = $data['session_type'] ?? 'viewing'; // Using 'viewing' for Railway compatibility
     
     $insert_stmt = $conn->prepare($insert_sql);
     $insert_stmt->execute([

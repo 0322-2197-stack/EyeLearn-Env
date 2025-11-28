@@ -256,48 +256,109 @@ class CVEyeTrackingSystem {
             throw new Error('Browser streaming disabled');
         }
 
+        // Enhanced browser compatibility check
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Camera API not available');
+            const errorMsg = 'Modern camera API not available. Please use a modern browser (Chrome, Edge, Firefox).';
+            console.error('❌', errorMsg);
+            if (!this.cameraErrorShown) {
+                this.cameraErrorShown = true;
+                this.showCameraError('BROWSER_NOT_SUPPORTED', errorMsg);
+            }
+            throw new Error(errorMsg);
         }
 
+        console.log('📹 Requesting camera access...');
+
         try {
+            // Request camera with optimal settings for eye tracking
             this.cameraStream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: 640,
-                    height: 360,
-                    frameRate: { max: this.captureFps }
+                    width: { ideal: 640 },
+                    height: { ideal: 360 },
+                    frameRate: { ideal: this.captureFps, max: this.captureFps },
+                    facingMode: 'user' // Prefer front-facing camera
                 },
                 audio: false
             });
+
+            console.log('✅ Camera access granted');
+
+            // Get the actual video track settings
+            const videoTrack = this.cameraStream.getVideoTracks()[0];
+            if (videoTrack) {
+                const settings = videoTrack.getSettings();
+                console.log(`📹 Camera settings: ${settings.width}x${settings.height} @ ${settings.frameRate}fps`);
+            }
 
             const videoElement = this.getCaptureVideoElement();
             if (videoElement) {
                 videoElement.srcObject = this.cameraStream;
                 videoElement.muted = true;
                 videoElement.playsInline = true;
+                videoElement.autoplay = true;
+
+                // Enhanced video element event handling
+                videoElement.onloadedmetadata = () => {
+                    console.log('📹 Video metadata loaded');
+                    if (typeof videoElement.play === 'function') {
+                        videoElement.play().catch((playError) => {
+                            console.warn('⚠️ Video autoplay prevented:', playError.message);
+                        });
+                    }
+                };
+
+                videoElement.onloadeddata = () => {
+                    console.log('✅ Video stream ready');
+                };
+
+                // Attempt initial play
                 if (typeof videoElement.play === 'function') {
                     const playPromise = videoElement.play();
                     if (playPromise && typeof playPromise.catch === 'function') {
-                        playPromise.catch(() => { });
+                        playPromise.catch((playError) => {
+                            console.warn('⚠️ Initial play prevented:', playError.message);
+                        });
                     }
                 }
-                videoElement.onloadedmetadata = () => {
-                    if (typeof videoElement.play === 'function') {
-                        videoElement.play().catch(() => { });
-                    }
-                };
             }
 
+            // Create canvas for frame capture with optimized settings
             this.captureCanvas = document.createElement('canvas');
-            this.captureCtx = this.captureCanvas.getContext('2d', { willReadFrequently: true });
+            this.captureCtx = this.captureCanvas.getContext('2d', {
+                willReadFrequently: true,
+                alpha: false // Disable alpha for better performance
+            });
 
-            console.log(`📹 Browser camera stream started @ ${this.captureFps} FPS`);
+            console.log(`✅ Browser camera initialized successfully @ ${this.captureFps} FPS`);
         } catch (error) {
-            console.error('❌ Unable to access camera:', error);
+            console.error('❌ Camera access error:', error);
+
+            // Provide specific error messages based on error type
+            let errorType = 'UNKNOWN';
+            let errorMessage = error.message;
+
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                errorType = 'PERMISSION_DENIED';
+                errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                errorType = 'NO_CAMERA';
+                errorMessage = 'No camera found. Please connect a webcam and try again.';
+            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                errorType = 'CAMERA_IN_USE';
+                errorMessage = 'Camera is already in use by another application. Please close other apps using the camera.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorType = 'UNSUPPORTED_CONSTRAINTS';
+                errorMessage = 'Camera does not support requested settings. Trying with default settings...';
+            } else if (error.name === 'TypeError') {
+                errorType = 'INVALID_CONSTRAINTS';
+                errorMessage = 'Invalid camera configuration.';
+            }
+
             if (!this.cameraErrorShown) {
                 this.cameraErrorShown = true;
-                this.showCameraError();
+                this.showCameraError(errorType, errorMessage);
             }
+
             throw error;
         }
     }
@@ -1570,209 +1631,119 @@ class CVEyeTrackingSystem {
         } catch (error) {
             // Handle connection errors silently during transitions
             if (Math.random() < 0.01 && !this.isTransitioning) { // Only log 1% of connection errors
-                console.warn('⚠️ Failed to fetch fullscreen video frame:', error.message);
-            }
+                isConnected: this.isConnected,
+                    isTracking: this.isTracking,
+                        totalTime: this.totalTime,
+                            moduleId: this.moduleId,
+                                sectionId: this.sectionId
+            };
         }
-    }
-
-    formatTime(seconds) {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    showCameraError() {
-        const errorContainer = document.createElement('div');
-        errorContainer.innerHTML = `
-            <div class="fixed top-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md z-50">
-                <div class="flex items-center mb-2">
-                    <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
-                    <h3 class="text-sm font-semibold text-red-700">Camera Required</h3>
-                </div>
-                
-                <div class="text-xs text-red-600 space-y-1">
-                    <p>📷 Eye tracking requires camera access</p>
-                    <p>Please check:</p>
-                    <ol class="list-decimal list-inside ml-2 space-y-1">
-                        <li>Camera is connected and working</li>
-                        <li>No other apps are using the camera</li>
-                        <li>Camera permissions are enabled</li>
-                        <li>Try unplugging and reconnecting camera</li>
-                    </ol>
-                    <p class="text-blue-600 mt-2">🔧 Check Windows Device Manager for camera issues</p>
-                </div>
-                
-                <button onclick="this.parentElement.remove()" class="mt-2 text-xs text-red-600 hover:text-red-800">
-                    Dismiss
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(errorContainer);
-
-        // Auto-dismiss after 10 seconds
-        setTimeout(() => {
-            if (errorContainer.parentNode) {
-                errorContainer.remove();
-            }
-        }, 10000);
-    }
-
-    showServiceError() {
-        const errorContainer = document.createElement('div');
-        const serviceUrl = this.pythonServiceUrl || getGlobalPythonServiceUrl();
-        errorContainer.innerHTML = `
-            <div class="fixed top-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-sm z-50">
-                <div class="flex items-center mb-2">
-                    <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
-                    <h3 class="text-sm font-semibold text-red-700">Enhanced Eye Tracking Service</h3>
-                </div>
-                
-                <div class="text-xs text-red-600 space-y-1">
-                    <p>❌ Enhanced Python service not running</p>
-                    <p>To enable enhanced CV eye tracking:</p>
-                    <ol class="list-decimal list-inside ml-2 space-y-1">
-                        <li>Install Python dependencies (opencv, numpy, flask)</li>
-                        <li>Run enhanced eye_tracking_service.py from python_services/</li>
-                        <li>Service should start on ${serviceUrl}</li>
-                        <li>Refresh this page</li>
-                    </ol>
-                    <p class="text-blue-600 mt-2">🎯 Features: 3s countdown, real-time focus tracking, detailed metrics</p>
-                </div>
-                
-                <button onclick="this.parentElement.remove()" class="mt-2 text-xs text-red-600 hover:text-red-800">
-                    Dismiss
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(errorContainer);
-
-        // Auto-dismiss after 15 seconds (longer since it's enhanced info)
-        setTimeout(() => {
-            if (errorContainer.parentNode) {
-                errorContainer.remove();
-            }
-        }, 15000);
-    }
-
-    // Public method to get current stats
-    getStats() {
-        return {
-            isConnected: this.isConnected,
-            isTracking: this.isTracking,
-            totalTime: this.totalTime,
-            moduleId: this.moduleId,
-            sectionId: this.sectionId
-        };
-    }
 
     // Method to completely stop the service - FOR COURSE EXIT
     async stopService() {
-        console.log('🛑 Stopping eye tracking service completely (course exit)...');
+            console.log('🛑 Stopping eye tracking service completely (course exit)...');
 
-        this.isTransitioning = true; // Prevent any new operations
+            this.isTransitioning = true; // Prevent any new operations
 
-        // Save final session data before stopping
-        await this.saveSessionData();
+            // Save final session data before stopping
+            await this.saveSessionData();
 
-        try {
-            // Stop tracking on the service with final metrics
-            if (this.isConnected && this.isTracking) {
-                try {
-                    const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    });
+            try {
+                // Stop tracking on the service with final metrics
+                if (this.isConnected && this.isTracking) {
+                    try {
+                        const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        });
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.success) {
-                            console.log('⏹️ Eye tracking stopped on service (course exit)');
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                console.log('⏹️ Eye tracking stopped on service (course exit)');
 
-                            // Show final metrics for course exit
-                            if (data.final_metrics) {
-                                console.log('📊 Final course metrics:', data.final_metrics);
-                                this.showFinalMetrics(data.final_metrics);
+                                // Show final metrics for course exit
+                                if (data.final_metrics) {
+                                    console.log('📊 Final course metrics:', data.final_metrics);
+                                    this.showFinalMetrics(data.final_metrics);
+                                }
                             }
                         }
+                    } catch (error) {
+                        console.warn('⚠️ Error stopping service:', error);
                     }
-                } catch (error) {
-                    console.warn('⚠️ Error stopping service:', error);
                 }
-            }
 
-            // CRITICAL: Shut down the camera service completely
-            if (this.isConnected) {
-                try {
-                    console.log('📹 Shutting down camera service...');
-
-                    // Show immediate notification that camera is being shut down
-                    this.showCameraShutdownNotification();
-
-                    const shutdownResponse = await fetch(`${this.pythonServiceUrl}/api/shutdown`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    });
-
-                    if (shutdownResponse.ok) {
-                        const shutdownData = await shutdownResponse.json();
-                        if (shutdownData.success) {
-                            console.log('📹 Camera service shut down successfully');
-                        } else {
-                            console.warn('⚠️ Camera shutdown response not successful:', shutdownData);
-                        }
-                    } else {
-                        console.warn('⚠️ Camera shutdown HTTP error:', shutdownResponse.status);
-                    }
-                } catch (shutdownError) {
-                    console.warn('⚠️ Error shutting down camera service:', shutdownError);
-
-                    // Fallback: Try alternative shutdown endpoint
+                // CRITICAL: Shut down the camera service completely
+                if (this.isConnected) {
                     try {
-                        console.log('📹 Trying alternative camera shutdown...');
-                        await fetch(`${this.pythonServiceUrl}/api/stop`, {
+                        console.log('📹 Shutting down camera service...');
+
+                        // Show immediate notification that camera is being shut down
+                        this.showCameraShutdownNotification();
+
+                        const shutdownResponse = await fetch(`${this.pythonServiceUrl}/api/shutdown`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
                         });
-                        console.log('📹 Alternative camera shutdown attempted');
-                    } catch (fallbackError) {
-                        console.warn('⚠️ Alternative shutdown also failed:', fallbackError);
+
+                        if (shutdownResponse.ok) {
+                            const shutdownData = await shutdownResponse.json();
+                            if (shutdownData.success) {
+                                console.log('📹 Camera service shut down successfully');
+                            } else {
+                                console.warn('⚠️ Camera shutdown response not successful:', shutdownData);
+                            }
+                        } else {
+                            console.warn('⚠️ Camera shutdown HTTP error:', shutdownResponse.status);
+                        }
+                    } catch (shutdownError) {
+                        console.warn('⚠️ Error shutting down camera service:', shutdownError);
+
+                        // Fallback: Try alternative shutdown endpoint
+                        try {
+                            console.log('📹 Trying alternative camera shutdown...');
+                            await fetch(`${this.pythonServiceUrl}/api/stop`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                            console.log('📹 Alternative camera shutdown attempted');
+                        } catch (fallbackError) {
+                            console.warn('⚠️ Alternative shutdown also failed:', fallbackError);
+                        }
                     }
                 }
+
+                // Force disconnect from service
+                this.isConnected = false;
+                this.isTracking = false;
+                this.countdownActive = false;
+
+                if (this.browserStreamingEnabled) {
+                    this.stopLocalFrameStreaming();
+                    this.stopBrowserCamera();
+                }
+
+                // Clean up all intervals and monitoring
+                this.cleanupAllIntervals();
+                this.stopHealthMonitoring();
+                this.stopDataSaving();
+
+                // Clean up interface elements
+                this.cleanupInterface();
+
+                console.log('✅ Eye tracking service and camera completely stopped');
+
+            } catch (error) {
+                console.error('❌ Error during service stop:', error);
+            } finally {
+                this.isTransitioning = false;
             }
-
-            // Force disconnect from service
-            this.isConnected = false;
-            this.isTracking = false;
-            this.countdownActive = false;
-
-            if (this.browserStreamingEnabled) {
-                this.stopLocalFrameStreaming();
-                this.stopBrowserCamera();
-            }
-
-            // Clean up all intervals and monitoring
-            this.cleanupAllIntervals();
-            this.stopHealthMonitoring();
-            this.stopDataSaving();
-
-            // Clean up interface elements
-            this.cleanupInterface();
-
-            console.log('✅ Eye tracking service and camera completely stopped');
-
-        } catch (error) {
-            console.error('❌ Error during service stop:', error);
-        } finally {
-            this.isTransitioning = false;
         }
-    }
 
     // Static method to handle course exit - COMPLETE SERVICE SHUTDOWN
     static async handleCourseExit() {

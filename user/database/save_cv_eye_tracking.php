@@ -35,7 +35,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $module_id = intval($input['module_id'] ?? 0);
 $section_id = intval($input['section_id'] ?? 0);
 $time_spent = intval($input['time_spent'] ?? 0); // Time in seconds
-$session_type = $input['session_type'] ?? 'cv_tracking'; // Computer vision tracking
+$session_type = $input['session_type'] ?? 'viewing'; // Computer vision tracking (using 'viewing' for Railway compatibility)
 
 if ($module_id <= 0) {
     echo json_encode(['success' => false, 'error' => 'Invalid module ID']);
@@ -51,7 +51,7 @@ try {
     // Check if record exists for today
     $check_query = "SELECT id, total_time_seconds FROM eye_tracking_sessions 
                    WHERE user_id = ? AND module_id = ? AND section_id = ? 
-                   AND session_type = 'cv_tracking'
+                   AND session_type = 'viewing'
                    AND DATE(created_at) = CURDATE()
                    ORDER BY created_at DESC LIMIT 1";
     
