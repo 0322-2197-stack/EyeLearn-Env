@@ -384,10 +384,31 @@ class CVEyeTrackingSystem {
             this.metrics = result.metrics;
         }
         
-        const attentionScore = this.latestBackendMetrics && typeof this.latestBackendMetrics.attention_score === 'number'
-            ? this.latestBackendMetrics.attention_score
-            : 0;
-        const isFocused = attentionScore >= FOCUS_ATTENTION_THRESHOLD;
+        const statusPayload = result.status || {};
+        const metrics = this.latestBackendMetrics || {};
+        
+        let attentionScore = typeof metrics.attention_score === 'number'
+            ? metrics.attention_score
+            : null;
+        
+        if (attentionScore === null && typeof metrics.focus_percentage === 'number') {
+            attentionScore = metrics.focus_percentage / 100;
+        }
+        
+        let isFocused;
+        if (typeof statusPayload.is_focused === 'boolean') {
+            isFocused = statusPayload.is_focused;
+        } else if (attentionScore !== null) {
+            isFocused = attentionScore >= FOCUS_ATTENTION_THRESHOLD;
+        } else {
+            isFocused = this.timers.isCurrentlyFocused;
+        }
+        
+        if (attentionScore === null) {
+            attentionScore = isFocused ? 1 : 0;
+        }
+        
+        this.metrics.attention_score = attentionScore;
         
         if (this.timers.isCurrentlyFocused !== isFocused) {
             this.handleFocusChange(isFocused);

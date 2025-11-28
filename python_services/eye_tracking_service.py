@@ -911,12 +911,15 @@ class EyeTrackingService:
         
         total_time = current_focused + current_unfocused
         focus_percentage = (current_focused / total_time * 100) if total_time > 0 else 0
+        attention_score = focus_percentage / 100 if focus_percentage > 0 else 0
         
         return {
             'focused_time': round(current_focused, 1),
             'unfocused_time': round(current_unfocused, 1),
             'total_time': round(total_time, 1),
             'focus_percentage': round(focus_percentage, 1),
+            'attention_score': round(attention_score, 3),
+            'is_focused': bool(self.is_focused),
             'focus_sessions': len(self.session_data['focus_sessions']),
             'unfocus_sessions': len(self.session_data['unfocus_sessions']),
             'current_state': 'focused' if self.is_focused else 'unfocused',
