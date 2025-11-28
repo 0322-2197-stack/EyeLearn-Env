@@ -1,0 +1,12 @@
+# EyeLearn - Railway Configuration
+# Forces Railway to use our custom PHP Dockerfile instead of auto-detecting Python
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health.php"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

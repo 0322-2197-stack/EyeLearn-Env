@@ -1,0 +1,16 @@
+# EyeLearn - Nixpacks Configuration
+# Prevents Nixpacks from auto-detecting Python due to setup.py in the root
+# Forces use of the custom Dockerfile for PHP deployment
+
+# Disable all Nixpacks phases - let Dockerfile handle everything
+[phases.setup]
+onlyIncludeFiles = []
+
+[phases.install]
+cmds = []
+
+[phases.build]
+cmds = []
+
+# Note: When railway.toml specifies builder = "dockerfile",
+# this file serves as a fallback configuration
