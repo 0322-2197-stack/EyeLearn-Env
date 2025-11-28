@@ -1,13 +1,10 @@
 providers = ["python"]
 
 [phases.setup]
-nixPkgs = ["python39", "python39Packages.pip", "gcc", "cmake"]
+nixPkgs = ["python39", "gcc", "cmake"]
 
 [phases.install]
-cmds = [
-    "python -m pip install --upgrade pip",
-    "pip install --no-cache-dir -r requirements.txt"
-]
+cmds = ["pip install --no-cache-dir -r requirements.txt"]
 
 [phases.build]
 cmds = []
