@@ -1,0 +1,68 @@
+# EyeLearn - Railway Ignore File
+# Excludes files from the Railway build context to prevent Python auto-detection
+
+# Python files - prevent Nixpacks from detecting Python
+setup.py
+*.pyc
+__pycache__/
+venv/
+.venv/
+env/
+ENV/
+python_services/
+python.Dockerfile
+
+# Development scripts (not needed in production)
+*.bat
+deploy_vps.sh
+run_python_service.bat
+run_python_service.sh
+start.bat
+start.sh
+restart_tracking.bat
+
+# Environment files (use Railway's environment variables instead)
+.env
+.env.local
+.env.example
+
+# Development and IDE files
+.history/
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and temporary files
+*.log
+temp_gaze/
+
+# Documentation (not needed for runtime)
+md/
+*.md
+!README.md
+
+# Test files
+*_test.php
+*_test.html
+test_*.php
+test_*.html
+debug_*.php
+debug_*.html
+*_diagnostic.html
+widget_test.html
+manual_widget_test.html
+direct_frame_test.html
+simple_video_test.html
+video_diagnostic.html
+
+# Node.js (if not needed)
+node_modules/
+package-lock.json
+
+# Git
+.git/
+.gitignore
