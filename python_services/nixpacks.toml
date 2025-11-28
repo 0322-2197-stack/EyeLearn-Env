@@ -1,0 +1,21 @@
+# Nixpacks configuration for Python Eye Tracking Service
+# This configures the build environment for Railway deployment
+
+[phases.setup]
+# Install system dependencies required by OpenCV, MediaPipe, and other CV libraries
+nixPkgs = [
+  "python39",
+  "libGL",
+  "glib",
+  "libgcc",
+  "stdenv.cc.cc.lib",
+  "zlib"
+]
+
+[phases.install]
+# Install Python dependencies from requirements.txt
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+# Start the Flask eye tracking service using the PORT variable from Railway
+cmd = "python eye_tracking_service.py"
