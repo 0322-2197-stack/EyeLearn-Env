@@ -1,0 +1,36 @@
+# Ignore Python virtual environments
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Ignore local configuration
+config_environment.php
+.env
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore logs
+*.log
+error_log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore backup files
+*.bak
+*.old
+*~
+
+# Ignore test files (optional)
+test_*.php
+debug_*.php
+
+# Keep important deployment files
+!check_railway_ready.php
+!test_schema_sync.php

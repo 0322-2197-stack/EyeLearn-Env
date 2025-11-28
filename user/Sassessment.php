@@ -372,7 +372,7 @@ if ($result->num_rows > 0) {
                                         m.title AS module_name,
                                         mc.completion_date,
                                         mc.final_quiz_score AS current_score,
-                                        COALESCE(SUM(eta.total_focus_time/3600), 0) AS total_focus_time,
+                                        COALESCE(SUM(eta.total_focused_time/3600), 0) AS total_focus_time,
                                         COALESCE((
                                             SELECT COUNT(fqq.id)
                                             FROM final_quiz_questions fqq

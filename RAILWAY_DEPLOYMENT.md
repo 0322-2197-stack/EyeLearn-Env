@@ -1,199 +1,186 @@
-# Railway MySQL Deployment Guide
+# Railway Deployment Guide for EyeLearn
 
-## Overview
+## Prerequisites
+1. GitHub repository with your code
+2. Railway account (https://railway.app)
+3. MySQL database service on Railway
 
-This document describes how the EyeLearn application is configured to connect to Railway MySQL database.
+## Step 1: Prepare Your Repository
 
-## Database Configuration
+Ensure these files are in your repository:
+- ✅ `Dockerfile` (✓ Updated for Railway PORT)
+- ✅ `railway.toml` (✓ Configuration file)
+- ✅ `database/db_connection.php` (✓ Uses environment variables)
+- ✅ `database/migrations/run_manually.sql` (✓ Migration script)
 
-The application uses environment variables to configure the database connection, allowing it to work with both local development (Docker) and Railway production environments.
+## Step 2: Create Railway Project
 
-### Environment Variables
+1. Go to https://railway.app
+2. Click "New Project"
+3. Select "Deploy from GitHub repo"
+4. Choose your EyeLearn repository
+5. Railway will automatically detect the Dockerfile
 
-The following environment variables are used for database configuration:
+## Step 3: Add MySQL Database
 
-```env
-DB_HOST=caboose.proxy.rlwy.net
-DB_PORT=31049
-DB_USER=root
-DB_PASS=NBONxXGqkEenURWCmKtTJAVywtwEduKD
-DB_NAME=railway
+1. In your Railway project, click "+ New"
+2. Select "Database" → "Add MySQL"
+3. Railway will create a MySQL instance
+4. Note the connection details (they'll be in environment variables)
+
+## Step 4: Configure Environment Variables
+
+In Railway project settings, add these variables:
+
+### Database Variables (Auto-populated by Railway MySQL)
+- `MYSQLHOST` - Railway provides this
+- `MYSQLPORT` - Railway provides this  
+- `MYSQLUSER` - Railway provides this
+- `MYSQLPASSWORD` - Railway provides this
+- `MYSQLDATABASE` - Railway provides this
+
+### Map to Your App's Expected Variables
+Add these variable references:
+```
+DB_HOST=${{MYSQLHOST}}
+DB_PORT=${{MYSQLPORT}}
+DB_USER=${{MYSQLUSER}}
+DB_PASS=${{MYSQLPASSWORD}}
+DB_NAME=${{MYSQLDATABASE}}
 ```
 
-### Configuration Files
-
-1. **`.env`** (Root directory) - Main environment configuration
-2. **`user/.env`** - User-specific configuration (includes Gemini API key)
-3. **`.env.example`** - Template for environment variables
-
-## Database Connection System
-
-### How It Works
-
-1. **Environment Loader** (`user/load_env.php`)
-   - Loads environment variables from `.env` files
-   - Checks both `user/.env` and root `.env`
-   - Sets variables in `$_ENV`, `$_SERVER`, and via `putenv()`
-
-2. **Database Connection** (`database/db_connection.php`)
-   - Loads the environment variables
-   - Reads from environment variables with fallback to defaults
-   - Supports both PDO and mysqli connections
-   - Priority: Docker/Railway env vars > `.env` file > localhost defaults
-
-### Usage
-
-```php
-// Include database connection
-require_once __DIR__ . '/database/db_connection.php';
-
-// Get PDO connection
-$pdo = getPDOConnection();
-
-// Get mysqli connection
-$conn = getMysqliConnection();
+### Optional: Python Service URL
+If you deployed the Python eye-tracking service separately:
+```
+PYTHON_SERVICE_URL=<your-python-service-url>
 ```
 
-## Database Schema
+## Step 5: Run Database Migration
 
-The database consists of **17 tables**:
+### Option A: Railway Dashboard
+1. Go to your MySQL service in Railway
+2. Click "Data" tab
+3. Click "Query"
+4. Copy and paste contents of `database/migrations/run_manually.sql`
+5. Execute
 
-### Core Tables
-- `users` - User accounts and authentication
-- `modules` - Learning modules
-- `module_parts` - Module sections/parts
-- `module_sections` - Detailed module sections
-
-### Quiz & Assessment Tables
-- `final_quizzes` - Final assessments
-- `final_quiz_questions` - Quiz questions
-- `final_quiz_retakes` - Retake requests
-- `checkpoint_quizzes` - Checkpoint quizzes
-- `checkpoint_quiz_questions` - Checkpoint questions
-- `checkpoint_quiz_results` - Quiz results
-- `module_completions` - Module completion tracking
-
-### Eye Tracking Tables
-- `eye_tracking_sessions` - Tracking sessions
-- `eye_tracking_analytics` - Analytics data
-- `eye_tracking_data` - Raw tracking data
-- `focus_events` - Focus/unfocus events
-- `daily_analytics` - Daily aggregated data
-
-### AI & Assessment Tables
-- `ai_recommendations` - AI-generated feedback
-- `assessments` - Assessment definitions
-
-## Importing Schema to Railway
-
-To import or update the database schema on Railway:
-
+### Option B: Using Railway CLI
 ```bash
-php import_schema_to_railway.php
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login
+railway login
+
+# Link to your project
+railway link
+
+# Run migration
+railway run mysql -h $MYSQLHOST -P $MYSQLPORT -u $MYSQLUSER -p$MYSQLPASSWORD $MYSQLDATABASE < database/migrations/run_manually.sql
 ```
 
-This script:
-- Connects to Railway MySQL
-- Imports the `database/elearn_db.sql` file
-- Handles large files and complex SQL statements
-- Shows progress and error reporting
-- Creates all tables with data
+## Step 6: Import Full Schema
 
-## Testing Database Connection
+After migration, import the complete schema:
 
-To verify the database connection:
+1. In Railway MySQL Data → Query tab
+2. Copy contents of `database/elearn_db.sql`
+3. Paste and execute (may need to do in sections)
 
+OR use Railway CLI:
 ```bash
-php test_db_connection.php
+railway run mysql -h $MYSQLHOST -P $MYSQLPORT -u $MYSQLUSER -p$MYSQLPASSWORD $MYSQLDATABASE < database/elearn_db.sql
 ```
 
-This will:
-- Display current configuration
-- Test the connection
-- List all tables and row counts
+## Step 7: Deploy
 
-## Docker Compose Support
+1. Railway will automatically deploy when you push to GitHub
+2. Or click "Deploy" in Railway dashboard
+3. Wait for build to complete
+4. Check deployment logs for any errors
 
-The `docker-compose.yml` file has been updated to support environment variables:
+## Step 8: Verify Deployment
 
-```yaml
-environment:
-  - DB_HOST=${DB_HOST:-db}
-  - DB_NAME=${DB_NAME:-elearn_db}
-  - DB_USER=${DB_USER:-root}
-  - DB_PASS=${DB_PASS:-rootpassword}
-  - DB_PORT=${DB_PORT:-3306}
+### Test Database Connection
+Visit: `https://your-app.railway.app/test_schema_sync.php`
+
+Should show:
+```
+✓ Database connection successful
+✓ All systems are synchronized
 ```
 
-This allows the same configuration to work for:
-- **Local Development**: Uses Docker's MySQL service (default values)
-- **Railway Production**: Uses environment variables from `.env`
+### Test Application
+1. Visit your Railway URL
+2. Login/Register
+3. Test eye tracking features
+4. Verify data is saving to database
 
-## Switching Between Environments
+## Environment Variables Reference
 
-### For Local Development (Docker)
-Comment out Railway credentials in `.env` and let Docker Compose use defaults.
+Your `db_connection.php` reads these variables:
+- `DB_HOST` - Database hostname
+- `DB_NAME` - Database name  
+- `DB_USER` - Database username
+- `DB_PASS` - Database password
+- `DB_PORT` - Database port
 
-### For Railway Production
-Keep Railway credentials in `.env` file.
+Railway's MySQL service provides:
+- `MYSQLHOST`
+- `MYSQLDATABASE`
+- `MYSQLUSER`
+- `MYSQLPASSWORD`
+- `MYSQLPORT`
 
-### For XAMPP/Local PHP
-The system will automatically fall back to `localhost` MySQL if Railway connection fails and the script is running on localhost.
-
-## Security Notes
-
-1. **Never commit `.env` files** to public repositories
-2. Use `.env.example` as a template
-3. Railway credentials are specific to your deployment
-4. Rotate database passwords regularly
-
-## Database Information
-
-- **Provider**: Railway MySQL
-- **Version**: MySQL 9.4.0
-- **Host**: caboose.proxy.rlwy.net
-- **Port**: 31049
-- **Database**: railway
+You need to map Railway's variables to your app's expected names (shown in Step 4).
 
 ## Troubleshooting
 
-### Connection Errors
+### Issue: "Database connection failed"
+- Check that environment variables are set correctly
+- Verify Railway MySQL service is running
+- Check deployment logs for connection errors
 
-If you see connection errors:
+### Issue: "PORT not found"
+- Dockerfile now handles dynamic PORT automatically
+- Railway sets PORT environment variable
+- Apache will listen on Railway's assigned port
 
-1. Verify environment variables are loaded:
-   ```bash
-   php -r "require 'user/load_env.php'; echo getenv('DB_HOST');"
-   ```
+### Issue: "Migration failed"
+- Ensure MySQL service is fully started
+- Check that migration SQL syntax is correct
+- Try running migration in smaller chunks
 
-2. Test the connection:
-   ```bash
-   php test_db_connection.php
-   ```
+### Issue: "Eye tracking not working"
+- Verify Python service is deployed separately
+- Set PYTHON_SERVICE_URL environment variable
+- Check CORS settings in Python service
 
-3. Check Railway dashboard for database status
+## Post-Deployment
 
-### Schema Issues
+### Monitor Your Application
+- Check Railway logs for errors
+- Monitor database usage
+- Set up notifications for failures
 
-If tables are missing or outdated:
+### Update Deployment
+Pushes to your GitHub main branch will automatically trigger redeployment.
 
-1. Re-import the schema:
-   ```bash
-   php import_schema_to_railway.php
-   ```
+## Cost Considerations
 
-2. Verify tables:
-   ```bash
-   php test_db_connection.php
-   ```
+Railway free tier includes:
+- $5 free credit per month
+- Scales automatically
+- Pay only for what you use
 
-## Additional Resources
+MySQL database will be the primary cost factor based on:
+- Storage used
+- Query volume
+- Uptime
 
-- [Railway Documentation](https://docs.railway.app/)
-- [MySQL 9.4 Documentation](https://dev.mysql.com/doc/)
-- Project Repository: https://github.com/0322-2197-stack/EyeLearn-Env
+## Support
 
----
-
-**Last Updated**: 2025-11-28
-**Status**: ✅ Production Ready
+If issues persist:
+1. Check Railway documentation: https://docs.railway.app
+2. Review deployment logs in Railway dashboard
+3. Test database connectivity using Railway's built-in tools

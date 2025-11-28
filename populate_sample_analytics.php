@@ -1,8 +1,16 @@
 <?php
-// Script to populate sample eye tracking data for testing
-$conn = new mysqli('localhost', 'root', '', 'elearn_db');
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+/**
+ * Script to populate sample eye tracking data for testing
+ * Updated to use centralized database connection
+ */
+
+// Use centralized database connection
+require_once __DIR__ . '/database/db_connection.php';
+
+try {
+    $conn = getMysqliConnection();
+} catch (Exception $e) {
+    die("Connection failed: " . $e->getMessage());
 }
 
 // Sample user ID (change this to match your test user)
@@ -36,23 +44,31 @@ for ($days_ago = 6; $days_ago >= 0; $days_ago--) {
             $stmt->execute();
         }
         
-        // Calculate daily analytics
-        $total_focus_time = rand(900, 3000); // 15-50 minutes of focus time
+        // Calculate daily analytics using NEW column names
+        $total_focused_time = rand(900, 3000); // 15-50 minutes of focus time
+        $total_unfocused_time = rand(100, 500); // 2-8 minutes unfocused
+        $focus_percentage = round(($total_focused_time / ($total_focused_time + $total_unfocused_time)) * 100, 2);
         $session_count = $sessions_count;
-        $avg_session_time = intval($total_focus_time / $session_count);
+        $avg_session_time = intval($total_focused_time / $session_count);
         $max_continuous = rand(600, 1800); // 10-30 minutes max continuous
         
-        // Insert analytics data
-        $analytics_sql = "INSERT INTO eye_tracking_analytics (user_id, module_id, section_id, date, total_focus_time, session_count, average_session_time, max_continuous_time) 
-                         VALUES (?, ?, 1, ?, ?, ?, ?, ?) 
+        // Insert analytics data with NEW column names
+        $analytics_sql = "INSERT INTO eye_tracking_analytics 
+                         (user_id, module_id, section_id, date, total_focused_time, total_unfocused_time, 
+                          focus_percentage, session_count, average_session_time, max_continuous_time) 
+                         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?) 
                          ON DUPLICATE KEY UPDATE 
-                         total_focus_time = VALUES(total_focus_time),
+                         total_focused_time = VALUES(total_focused_time),
+                         total_unfocused_time = VALUES(total_unfocused_time),
+                         focus_percentage = VALUES(focus_percentage),
                          session_count = VALUES(session_count),
                          average_session_time = VALUES(average_session_time),
                          max_continuous_time = VALUES(max_continuous_time)";
         
         $stmt = $conn->prepare($analytics_sql);
-        $stmt->bind_param('iisiiii', $user_id, $module_id, $date, $total_focus_time, $session_count, $avg_session_time, $max_continuous);
+        $stmt->bind_param('iisiidiii', $user_id, $module_id, $date, $total_focused_time, 
+                         $total_unfocused_time, $focus_percentage, $session_count, 
+                         $avg_session_time, $max_continuous);
         $stmt->execute();
     }
 }

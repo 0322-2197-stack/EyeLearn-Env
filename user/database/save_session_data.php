@@ -47,48 +47,58 @@ try {
         throw new Exception('Module ID is required');
     }
 
-    // Insert or update session data
+    // Extract focus time data
+    $focused_time = isset($focus_data['focused_time']) ? (int)$focus_data['focused_time'] : 0;
+    $unfocused_time = isset($focus_data['unfocused_time']) ? (int)$focus_data['unfocused_time'] : 0;
+
+    // Insert or update session data - NOW INCLUDES FOCUSED/UNFOCUSED TIMES
     $session_sql = "
         INSERT INTO eye_tracking_sessions 
-        (user_id, module_id, section_id, total_time_seconds, session_type, created_at, last_updated) 
-        VALUES (?, ?, ?, ?, 'viewing', NOW(), NOW())
+        (user_id, module_id, section_id, total_time_seconds, focused_time_seconds, unfocused_time_seconds, session_type, created_at, last_updated) 
+        VALUES (?, ?, ?, ?, ?, ?, 'viewing', NOW(), NOW())
         ON DUPLICATE KEY UPDATE 
         total_time_seconds = total_time_seconds + VALUES(total_time_seconds),
+        focused_time_seconds = focused_time_seconds + VALUES(focused_time_seconds),
+        unfocused_time_seconds = unfocused_time_seconds + VALUES(unfocused_time_seconds),
         last_updated = NOW()
     ";
 
     $stmt = $conn->prepare($session_sql);
-    $stmt->bind_param('iiis', $user_id, $module_id, $section_id, $session_time);
+    $stmt->bind_param('iiiiii', $user_id, $module_id, $section_id, $session_time, $focused_time, $unfocused_time);
     
     if (!$stmt->execute()) {
         throw new Exception('Failed to save session data');
     }
 
-    // If focus data is provided, we could save more detailed analytics
+    // If focus data is provided, save more detailed analytics using NEW column names
     if (!empty($focus_data)) {
         $focused_time = $focus_data['focused_time'] ?? 0;
         $unfocused_time = $focus_data['unfocused_time'] ?? 0;
         $focus_percentage = $focus_data['focus_percentage'] ?? 0;
 
-        // Update or insert daily analytics
+        // Update or insert daily analytics with NEW column names
         $analytics_sql = "
             INSERT INTO eye_tracking_analytics 
-            (user_id, module_id, section_id, date, total_focus_time, session_count, average_session_time, max_continuous_time, created_at, updated_at) 
-            VALUES (?, ?, ?, CURDATE(), ?, 1, ?, ?, NOW(), NOW())
+            (user_id, module_id, section_id, date, total_focused_time, total_unfocused_time, 
+             focus_percentage, session_count, average_session_time, max_continuous_time, created_at, updated_at) 
+            VALUES (?, ?, ?, CURDATE(), ?, ?, ?, 1, ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE 
-            total_focus_time = total_focus_time + VALUES(total_focus_time),
+            total_focused_time = total_focused_time + VALUES(total_focused_time),
+            total_unfocused_time = total_unfocused_time + VALUES(total_unfocused_time),
             session_count = session_count + 1,
-            average_session_time = (average_session_time + VALUES(average_session_time)) / 2,
+            average_session_time = (total_focused_time + VALUES(total_focused_time)) / (session_count + 1),
             max_continuous_time = GREATEST(max_continuous_time, VALUES(max_continuous_time)),
             updated_at = NOW()
         ";
 
         $stmt = $conn->prepare($analytics_sql);
-        $stmt->bind_param('iiiiii', 
+        $stmt->bind_param('iiiiidii', 
             $user_id, 
             $module_id, 
             $section_id, 
-            $focused_time, 
+            $focused_time,
+            $unfocused_time,
+            $focus_percentage,
             $session_time, 
             $session_time
         );
@@ -97,11 +107,10 @@ try {
     }
     
     if ($module_id) {
-        // You can adjust how completion is calculated. For now, use session_time heuristics:
-            $completion_percentage = isset($input['completion_percentage'])
+        // Update user progress
+        $completion_percentage = isset($input['completion_percentage'])
             ? floatval($input['completion_percentage'])
             : 0;
-      
 
         $progress_sql = "
             INSERT INTO user_progress 

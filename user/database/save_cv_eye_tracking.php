@@ -96,7 +96,7 @@ try {
         ]);
     }
     
-    // Update daily analytics
+    // Update daily analytics with NEW column names
     updateDailyAnalytics($conn, $user_id, $module_id, $section_id, $time_spent);
     
 } catch (Exception $e) {
@@ -105,37 +105,37 @@ try {
 
 function updateDailyAnalytics($conn, $user_id, $module_id, $section_id, $time_spent) {
     try {
-        $today = date('Y-m-d');
+        // Update or insert analytics data using NEW column names
+        $check_analytics = "SELECT id, total_focused_time, session_count FROM eye_tracking_analytics 
+                           WHERE user_id = ? AND module_id = ? AND section_id = ? AND date = CURDATE()";
         
-        // Check if analytics record exists for today
-        $check_analytics = "SELECT id, total_focus_time, session_count FROM eye_tracking_analytics 
-                           WHERE user_id = ? AND module_id = ? AND section_id = ? AND date = ?";
-        $stmt = $conn->prepare($check_analytics);
-        $stmt->bind_param("iiis", $user_id, $module_id, $section_id, $today);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        $analytics_stmt = $conn->prepare($check_analytics);
+        $analytics_stmt->bind_param("iii", $user_id, $module_id, $section_id);
+        $analytics_stmt->execute();
+        $analytics_result = $analytics_stmt->get_result();
         
-        if ($result->num_rows > 0) {
-            // Update existing analytics
-            $row = $result->fetch_assoc();
-            $new_total_time = $row['total_focus_time'] + $time_spent;
+        if ($row = $analytics_result->fetch_assoc()) {
+            // Update existing record using NEW column name
+            $new_total_time = $row['total_focused_time'] + $time_spent;
             $new_session_count = $row['session_count'] + 1;
-            $new_average = $new_total_time / $new_session_count;
+            $new_avg_time = floor($new_total_time / $new_session_count);
             
             $update_analytics = "UPDATE eye_tracking_analytics 
-                               SET total_focus_time = ?, session_count = ?, average_session_time = ?, updated_at = NOW()
+                               SET total_focused_time = ?, session_count = ?, average_session_time = ?, updated_at = NOW()
                                WHERE id = ?";
-            $stmt = $conn->prepare($update_analytics);
-            $stmt->bind_param("iiii", $new_total_time, $new_session_count, $new_average, $row['id']);
-            $stmt->execute();
+            
+            $upd_stmt = $conn->prepare($update_analytics);
+            $upd_stmt->bind_param("iiii", $new_total_time, $new_session_count, $new_avg_time, $row['id']);
+            $upd_stmt->execute();
         } else {
-            // Create new analytics record
+            // Insert new analytics record using NEW column name
             $insert_analytics = "INSERT INTO eye_tracking_analytics 
-                               (user_id, module_id, section_id, date, total_focus_time, session_count, average_session_time, created_at, updated_at)
-                               VALUES (?, ?, ?, ?, ?, 1, ?, NOW(), NOW())";
-            $stmt = $conn->prepare($insert_analytics);
-            $stmt->bind_param("iiisii", $user_id, $module_id, $section_id, $today, $time_spent, $time_spent);
-            $stmt->execute();
+                               (user_id, module_id, section_id, date, total_focused_time, session_count, average_session_time, created_at, updated_at)
+                               VALUES (?, ?, ?, CURDATE(), ?, 1, ?, NOW(), NOW())";
+            
+            $ins_stmt = $conn->prepare($insert_analytics);
+            $ins_stmt->bind_param("iiiii", $user_id, $module_id, $section_id, $time_spent, $time_spent);
+            $ins_stmt->execute();
         }
     } catch (Exception $e) {
         // Log error but don't fail the main request
