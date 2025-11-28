@@ -1,7 +1,12 @@
 # EyeLearn Eye Tracking - Railway Deployment Requirements
 # Headless versions for server deployment (no GUI needed)
 
-# Core Web Framework
+# Core Web Framework (FastAPI for async support)
+fastapi>=0.104.0,<1.0.0
+uvicorn[standard]>=0.24.0,<1.0.0
+python-multipart>=0.0.6
+
+# Legacy Flask support (for backward compatibility)
 Flask>=2.3.0,<3.0.0
 Flask-CORS>=4.0.0,<5.0.0
 

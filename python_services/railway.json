@@ -2,11 +2,11 @@
     "$schema": "https://railway.app/railway.schema.json",
     "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "python.Dockerfile"
+        "dockerfilePath": "../python.Dockerfile"
     },
     "deploy": {
-        "startCommand": "python eye_tracking_service.py",
+        "startCommand": "uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1",
         "restartPolicyType": "ON_FAILURE",
-        "restartPolicyMaxRetries": 3
+        "restartPolicyMaxRetries": 10
     }
 }

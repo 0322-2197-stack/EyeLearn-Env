@@ -1,15 +1,16 @@
-# Nixpacks configuration for Python Eye Tracking Service
+# Nixpacks configuration for Python Eye Tracking Service (FastAPI)
 # This configures the build environment for Railway deployment
 
 [phases.setup]
 # Install system dependencies required by OpenCV, MediaPipe, and other CV libraries
 nixPkgs = [
-  "python39",
+  "python312",
   "libGL",
   "glib",
   "libgcc",
   "stdenv.cc.cc.lib",
-  "zlib"
+  "zlib",
+  "ffmpeg"
 ]
 # Create the virtual environment early so later phases can rely on it
 cmds = [
@@ -24,5 +25,5 @@ cmds = [
 ]
 
 [start]
-# Start the Flask eye tracking service using the PORT variable from Railway
-cmd = "/opt/venv/bin/python eye_tracking_service.py"
+# Start the FastAPI eye tracking service using uvicorn and PORT variable from Railway
+cmd = "/opt/venv/bin/uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1"
