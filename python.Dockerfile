@@ -15,14 +15,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy only the python service directory
-COPY python_services ./python_services
-
-WORKDIR /app/python_services
+# Copy dependency file first for better caching
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
 
 EXPOSE 5000
 
