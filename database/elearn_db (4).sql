@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 28, 2025 at 03:25 AM
+-- Generation Time: Nov 24, 2025 at 07:33 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -1023,7 +1023,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `first_name`, `last_name`, `email`, `password`, `gender`, `section`, `role`, `profile_img`, `created_at`, `updated_at`, `camera_agreement_accepted`, `camera_agreement_date`) VALUES
 (1, 'Super', 'Admin', 'admin@admin.eyelearn', '$2y$10$5eql26ue0JmbvS6AAIQr/.pL8njF47sQ/.lDScg9/Gb..M.iZG1Ty', '', NULL, 'admin', 'default.png', '2025-04-21 15:01:17', '2025-04-21 16:07:51', 0, NULL),
-(31, 'Mark Aljerick', 'De Castro', '0322-2068@lspu.edu.ph', '$2y$10$7O.GmiH3CE9/4Rb9qOKtcutk7FWSfyTOq9X03r5sOb24Q2ltz86qW', 'Male', 'BSINFO-1A', 'student', NULL, '2025-11-23 14:28:37', '2025-11-28 01:53:36', 1, '2025-11-28 09:53:36'),
+(31, 'Mark Aljerick', 'De Castro', '0322-2068@lspu.edu.ph', '$2y$10$7O.GmiH3CE9/4Rb9qOKtcutk7FWSfyTOq9X03r5sOb24Q2ltz86qW', 'Male', 'BSINFO-1A', 'student', NULL, '2025-11-23 14:28:37', '2025-11-24 06:21:26', 1, '2025-11-24 14:21:26'),
 (32, 'Vonn Annilov', 'Cabajes', '0322-2197@lspu.edu.ph', '$2y$10$pNlcZOVSctPbzmIudYe3geVGl1aK7CcYGBVnAcFkdsWHXmCus4td2', 'Female', 'BSINFO-1A', 'student', NULL, '2025-11-24 06:22:55', '2025-11-24 06:23:03', 1, '2025-11-24 14:23:03');
 
 -- --------------------------------------------------------
@@ -1038,7 +1038,7 @@ CREATE TABLE `user_module_progress` (
   `module_id` int(11) NOT NULL,
   `completed_sections` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`completed_sections`)),
   `last_accessed` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `completed_checkpoint_quizzes` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`completed_checkpoint_quizzes`))
+  `completed_checkpoint_quizzes` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT '[]' CHECK (json_valid(`completed_checkpoint_quizzes`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
