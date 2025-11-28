@@ -14,19 +14,32 @@ COPY . /var/www/html/
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
 
-# Configure Apache to use PORT environment variable (Railway requirement)
-RUN echo "Listen \${PORT:-80}" > /etc/apache2/ports.conf && \
-    sed -i 's/80/${PORT}/' /etc/apache2/sites-available/000-default.conf
-
-# Configure Apache
+# Configure Apache ServerName
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Create startup script that sets PORT
+# Create startup script that configures PORT at runtime
 RUN echo '#!/bin/bash\n\
-    export PORT=${PORT:-80}\n\
-    sed -i "s/Listen .*/Listen ${PORT}/" /etc/apache2/ports.conf\n\
-    sed -i "s/<VirtualHost \*:.*>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/000-default.conf\n\
-    apache2-foreground' > /start.sh && chmod +x /start.sh
+    set -e\n\
+    \n\
+    # Use Railway PORT or default to 80\n\
+    PORT=${PORT:-80}\n\
+    \n\
+    echo "Configuring Apache to listen on port $PORT"\n\
+    \n\
+    # Update ports.conf\n\
+    echo "Listen $PORT" > /etc/apache2/ports.conf\n\
+    \n\
+    # Update default site\n\
+    sed -i "s/<VirtualHost \\*:.*>/<VirtualHost *:$PORT>/" /etc/apache2/sites-available/000-default.conf\n\
+    \n\
+    echo "Apache configured for port $PORT"\n\
+    \n\
+    # Start Apache in foreground\n\
+    exec apache2-foreground\n\
+    ' > /usr/local/bin/docker-entrypoint.sh
 
-# Start Apache with dynamic PORT support
-CMD ["/start.sh"]
+# Make startup script executable
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Use the startup script as entrypoint
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
