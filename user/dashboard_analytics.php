@@ -1,16 +1,22 @@
 <?php
 function getWeeklyFocusScore($conn, $user_id) {
-    // Use eye_tracking_analytics instead of user_study_sessions
+    // Calculate focus from eye_tracking_sessions (where Python service saves data)
     $query = "SELECT 
-        AVG(focus_percentage) as avg_focus,
         AVG(CASE 
-            WHEN date >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY) 
-            AND date < DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)
-            THEN focus_percentage 
-            END) as last_week_focus
-        FROM eye_tracking_analytics 
+            WHEN total_time_seconds > 0 
+            THEN (focused_time_seconds / total_time_seconds) * 100 
+            ELSE 0 
+        END) as avg_focus,
+        AVG(CASE 
+            WHEN date(created_at) >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY) 
+            AND date(created_at) < DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)
+            AND total_time_seconds > 0
+            THEN (focused_time_seconds / total_time_seconds) * 100 
+            ELSE NULL
+        END) as last_week_focus
+        FROM eye_tracking_sessions 
         WHERE user_id = ? 
-        AND date >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY)";
+        AND created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 14 DAY)";
     
     $stmt = $conn->prepare($query);
     
