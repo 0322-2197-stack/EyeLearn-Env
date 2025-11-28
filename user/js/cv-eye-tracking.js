@@ -102,6 +102,7 @@ class CVEyeTrackingSystem {
         this.frameBackoffMs = 0;
         this.latestBackendMetrics = null;
         this.currentUserId = null;
+        this.usesLocalVideoFeed = false;
         
         console.log(`🆕 CVEyeTrackingSystem instance created: ${this.instanceId}`);
         
@@ -213,7 +214,7 @@ class CVEyeTrackingSystem {
         
         await this.checkServiceHealth(true);
         
-        this.displayTrackingInterface({ useLocalVideo: false });
+        this.displayTrackingInterface({ useLocalVideo: true });
         this.initializeTimers();
         this.handleFocusChange(false);
         this.isTracking = true;
@@ -385,9 +386,10 @@ class CVEyeTrackingSystem {
         }
         
         if (result.current_frame) {
-            const videoElement = this.getWidgetVideoElement();
-            if (videoElement && videoElement.tagName === 'IMG') {
-                videoElement.src = result.current_frame;
+            const targetElementId = this.usesLocalVideoFeed ? 'tracking-annotated' : 'tracking-video';
+            const targetElement = document.getElementById(targetElementId);
+            if (targetElement) {
+                targetElement.src = result.current_frame;
             }
         }
         
@@ -1178,6 +1180,8 @@ class CVEyeTrackingSystem {
 
     displayTrackingInterface(options = {}) {
         const { useLocalVideo = false } = options;
+        this.usesLocalVideoFeed = useLocalVideo;
+        const showAnalyzedFeed = useLocalVideo;
         
         // Create the compact interface
         const trackingContainer = document.createElement('div');
@@ -1193,6 +1197,20 @@ class CVEyeTrackingSystem {
                      style="width: 100%; height: 100px; display: block; background: #000;"
                      class="rounded-b-lg"
                      alt="Live camera feed">`;
+        const analyzedMarkup = showAnalyzedFeed
+            ? `
+                <div class="px-2 py-1 text-xs text-gray-300 border-b border-gray-600">
+                    Analyzed Feed
+                </div>
+                <div class="relative bg-black">
+                    <img id="tracking-annotated" 
+                         style="width: 100%; height: 100px; display: block; background: #111;"
+                         class="rounded-b-lg"
+                         alt="Analyzed overlay">
+                </div>
+            `
+            : '';
+        
         trackingContainer.innerHTML = `
             <div class="fixed top-20 right-4 bg-black text-white shadow-2xl rounded-lg border border-gray-600 z-50" style="width: 180px; font-family: system-ui;">
                 <!-- Header with red dot and "Eye Tracking" -->
@@ -1228,6 +1246,8 @@ class CVEyeTrackingSystem {
                 <div class="relative bg-black">
                     ${videoMarkup}
                 </div>
+                
+                ${analyzedMarkup}
             </div>
         `;
         
@@ -1245,7 +1265,7 @@ class CVEyeTrackingSystem {
         }, 100);
         
         if (useLocalVideo) {
-        const videoElement = this.getWidgetVideoElement();
+            const videoElement = this.getWidgetVideoElement();
             if (videoElement) {
                 videoElement.muted = true;
                 videoElement.playsInline = true;
