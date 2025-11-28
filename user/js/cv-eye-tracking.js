@@ -1269,6 +1269,31 @@ class CVEyeTrackingSystem {
             this.startVideoUpdates();
         }
         
+        // Ensure video element is visible and properly configured
+        setTimeout(() => {
+            const videoElement = this.getWidgetVideoElement();
+            if (videoElement) {
+                videoElement.style.display = 'block';
+                videoElement.style.opacity = '1';
+                videoElement.style.width = '100%';
+                videoElement.style.height = '100px';
+                videoElement.style.objectFit = 'cover';
+                
+                // Add error handler to show placeholder if image fails to load
+                videoElement.onerror = () => {
+                    console.warn('⚠️ Frame image failed to load, showing placeholder');
+                    // Keep trying - don't show placeholder as it will keep retrying
+                };
+                
+                // Add load handler to confirm image loaded
+                videoElement.onload = () => {
+                    if (Math.random() < 0.1) {
+                        console.log('✅ Frame image loaded successfully');
+                    }
+                };
+            }
+        }, 100);
+        
         console.log('📺 Eye tracking interface displayed - exact format from image');
     }
 
@@ -1341,17 +1366,25 @@ class CVEyeTrackingSystem {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                cache: 'no-cache' // Prevent caching
             });
 
             if (response.ok) {
                 const data = await response.json();
                 
                 // Use the EXACT same logic as the working test
-                if (data.hasFrame && data.frameData) {
+                if (data.hasFrame && data.frameData && data.frameData.length > 0) {
                     const videoElement = this.getWidgetVideoElement();
                     if (videoElement) {
-                        videoElement.src = data.frameData;
+                        // Force image reload by adding timestamp to prevent caching
+                        const timestamp = Date.now();
+                        const separator = data.frameData.includes('?') ? '&' : '?';
+                        videoElement.src = data.frameData + separator + '_t=' + timestamp;
+                        
+                        // Ensure image is visible
+                        videoElement.style.display = 'block';
+                        videoElement.style.opacity = '1';
                         
                         // Update frame tracking (simplified)
                         this.frameCount++;
@@ -1362,11 +1395,13 @@ class CVEyeTrackingSystem {
                         if (Math.random() < 0.1) { // 10% chance like test
                             console.log(`✅ Frame updated (${data.frameData.length} chars)`);
                         }
+                    } else {
+                        console.warn('⚠️ Video element not found');
                     }
                 } else {
                     this.consecutiveFrameFailures++;
                     if (Math.random() < 0.05) { // Reduced logging to 5% to avoid spam
-                        console.log(`⚠️ No frame data: hasFrame=${data.hasFrame}`);
+                        console.log(`⚠️ No frame data: hasFrame=${data.hasFrame}, frameData length=${data.frameData?.length || 0}`);
                     }
                 }
             } else {
