@@ -35,8 +35,8 @@ RUN chmod +x start.sh || true
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Use python3 directly to run FastAPI service
+# Use python directly (python3.12-slim uses 'python' not 'python3')
 # Railway will override PORT via environment variable
 # Using shell form to allow PORT variable substitution
-CMD ["/bin/bash", "-c", "python3 -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["/bin/bash", "-c", "python -m uvicorn fastapi_service:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
 
