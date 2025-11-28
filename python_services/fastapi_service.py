@@ -148,9 +148,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting FastAPI Eye Tracking Service...")
     try:
-        # Initialize eye tracking service
-        eye_tracker = EyeTrackingService(auto_start_loop=False)
-        logger.info("✅ Eye tracking service initialized")
+        # Initialize eye tracking service (camera disabled for Railway by default)
+        # Camera access happens in browser, frames sent via /api/frames endpoint
+        camera_enabled = os.environ.get("CAMERA_ENABLED", "false").lower() in ("1", "true")
+        eye_tracker = EyeTrackingService(auto_start_loop=False, camera_enabled=camera_enabled)
+        logger.info(f"✅ Eye tracking service initialized (camera_enabled={camera_enabled})")
         
         # Start background tasks
         frame_processing_task = asyncio.create_task(process_frames_background())

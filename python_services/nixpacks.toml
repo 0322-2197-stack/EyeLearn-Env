@@ -1,6 +1,10 @@
 # Nixpacks configuration for Python Eye Tracking Service (FastAPI)
 # This configures the build environment for Railway deployment
 
+[variables]
+# Disable server-side camera (Railway has no camera hardware)
+CAMERA_ENABLED = "false"
+
 [phases.setup]
 # Install system dependencies required by OpenCV, MediaPipe, and other CV libraries
 nixPkgs = [

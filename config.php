@@ -52,4 +52,16 @@ function createUserSession($user) {
 
 // Initialize or resume session
 session_start();
+
+// Eye Tracking Service Configuration
+// Detect if running on Railway or local environment
+if (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_STATIC_URL')) {
+    // Production (Railway) - Use environment variable or set your Python service URL
+    $pythonServiceUrl = getenv('PYTHON_SERVICE_URL') ?: 'https://your-python-service.railway.app';
+} else {
+    // Local development
+    $pythonServiceUrl = 'http://127.0.0.1:5000';
+}
+
+define('PYTHON_SERVICE_URL', $pythonServiceUrl);
 ?>

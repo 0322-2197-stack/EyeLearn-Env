@@ -26,9 +26,10 @@ DEFAULT_TRACKING_SAVE_URL = os.environ.get(
     "http://localhost/capstone/user/database/save_enhanced_tracking.php"
 )
 
-# Camera enabled flag (defaults to enabled for backward compatibility)
-CAMERA_ENABLED_STR = os.environ.get("CAMERA_ENABLED", "1").lower()
-DEFAULT_CAMERA_ENABLED = CAMERA_ENABLED_STR not in ("0", "false", "False")
+# Camera enabled flag (defaults to DISABLED for Railway compatibility)
+# Set CAMERA_ENABLED=true in environment to enable server-side camera (local only)
+CAMERA_ENABLED_STR = os.environ.get("CAMERA_ENABLED", "0").lower()
+DEFAULT_CAMERA_ENABLED = CAMERA_ENABLED_STR in ("1", "true", "True")
 
 # Custom JSON encoder for NumPy types
 class NumpyEncoder(json.JSONEncoder):
