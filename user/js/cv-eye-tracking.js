@@ -357,9 +357,9 @@ class CVEyeTrackingSystem {
         
         const payload = {
             frame_base64: frameData,
-            user_id: this.currentUserId || 1,
-            module_id: this.moduleId,
-            section_id: this.sectionId,
+            user_id: String(this.currentUserId || 1),
+            module_id: String(this.moduleId),
+            section_id: this.sectionId ? String(this.sectionId) : null,
             fps: this.captureFps
         };
         
