@@ -594,318 +594,266 @@ class CVEyeTrackingSystem {
     stopDataSaving() {
         if (this.dataSaveInterval) {
             clearInterval(this.dataSaveInterval);
-            this.dataSaveInterval = null;
-            console.log('💾 Dashboard data saving stopped');
-        }
-    }
-
-    async saveSessionData() {
-        if (!this.isTracking || this.isTransitioning) {
-            return; // Don't save during transitions or when not tracking
         }
 
-        try {
-            const sessionData = {
-                module_id: this.moduleId,
-                section_id: this.sectionId,
-                session_time: Math.floor(this.timers.sessionTime || 0),
-                completion_percentage: typeof currentCompletionPercentage !== 'undefined'
-                    ? currentCompletionPercentage
-                    : 0,
-                focus_data: {
-                    focused_time: Math.floor(this.timers.focusedTime || 0),
-                    unfocused_time: Math.floor(this.timers.unfocusedTime || 0),
-                    focus_percentage: this.calculateFocusPercentage(),
-                    total_time: Math.floor(this.timers.sessionTime || 0)
-                }
-            };
-
-            const response = await fetch('database/save_session_data.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(sessionData)
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success) {
-                    console.log('💾 Session data saved to dashboard successfully');
-                } else {
-                    console.warn('⚠️ Failed to save session data:', result.error);
-                }
-            } else {
-                console.warn('⚠️ Dashboard data save HTTP error:', response.status);
-            }
-        } catch (error) {
-            console.warn('⚠️ Error saving session data to dashboard:', error);
-        }
-    }
-
-    calculateFocusPercentage() {
-        const totalActiveTime = this.timers.focusedTime + this.timers.unfocusedTime;
-        return totalActiveTime > 0 ? Math.round((this.timers.focusedTime / totalActiveTime) * 100) : 0;
-    }
-
-    hasCountdownBeenShownForModule() {
-        // Check sessionStorage to see if countdown was shown for this module in this session
-        const sessionKey = `eyetracking_countdown_${this.moduleId}`;
-        return sessionStorage.getItem(sessionKey) === 'shown';
-    }
-
-    markCountdownShownForModule() {
-        // Mark that countdown has been shown for this module in this session
-        const sessionKey = `eyetracking_countdown_${this.moduleId}`;
-        sessionStorage.setItem(sessionKey, 'shown');
-    }
-
-    initializeTimers() {
-        console.log('⏱️ Initializing timer system...');
-        this.timers.sessionStart = Date.now();
-        this.timers.sessionTime = 0;
-        this.timers.focusedTime = 0;
-        this.timers.unfocusedTime = 0;
-        this.timers.isCurrentlyFocused = false;
-        this.timers.baseFocusedTime = 0;
-        this.timers.baseUnfocusedTime = 0;
-        this.timers.currentFocusStart = null;
-        this.timers.currentUnfocusStart = null;
-
-        // Start the timer update loop
-        this.startTimerUpdates();
-    }
-
-    startTimerUpdates() {
-        // Update timers every 100ms for smooth display
-        this.timerInterval = setInterval(() => {
-            this.updateTimers();
-        }, 100);
-    }
-
-    updateTimers() {
-        if (!this.timers.sessionStart) return;
-
-        const now = Date.now();
-        this.timers.sessionTime = Math.floor((now - this.timers.sessionStart) / 1000);
-
-        // Update focus/unfocus timers based on current state
-        if (this.timers.isCurrentlyFocused && this.timers.currentFocusStart) {
-            const additionalFocusTime = Math.floor((now - this.timers.currentFocusStart) / 1000);
-            this.timers.focusedTime = this.timers.baseFocusedTime + additionalFocusTime;
-        } else if (!this.timers.isCurrentlyFocused && this.timers.currentUnfocusStart) {
-            const additionalUnfocusTime = Math.floor((now - this.timers.currentUnfocusStart) / 1000);
-            this.timers.unfocusedTime = this.timers.baseUnfocusedTime + additionalUnfocusTime;
+        hasCountdownBeenShownForModule() {
+            // Check sessionStorage to see if countdown was shown for this module in this session
+            const sessionKey = `eyetracking_countdown_${this.moduleId}`;
+            return sessionStorage.getItem(sessionKey) === 'shown';
         }
 
-        // Update the display
-        this.updateTimerDisplay();
-    }
-
-    updateTimerDisplay() {
-        // Update session time
-        const sessionTimeElement = document.getElementById('session-time');
-        if (sessionTimeElement) {
-            sessionTimeElement.textContent = this.timers.sessionTime;
+        markCountdownShownForModule() {
+            // Mark that countdown has been shown for this module in this session
+            const sessionKey = `eyetracking_countdown_${this.moduleId}`;
+            sessionStorage.setItem(sessionKey, 'shown');
         }
 
-        // Update focused time
-        const focusTimeElement = document.getElementById('focus-time');
-        if (focusTimeElement) {
-            focusTimeElement.textContent = this.timers.focusedTime;
-        }
-
-        // Update unfocused time
-        const unfocusTimeElement = document.getElementById('unfocus-time');
-        if (unfocusTimeElement) {
-            unfocusTimeElement.textContent = this.timers.unfocusedTime;
-        }
-
-        // Update focus percentage
-        const focusPercentageElement = document.getElementById('focus-percentage');
-        if (focusPercentageElement) {
-            const totalActiveTime = this.timers.focusedTime + this.timers.unfocusedTime;
-            const percentage = totalActiveTime > 0 ? Math.round((this.timers.focusedTime / totalActiveTime) * 100) : 0;
-            focusPercentageElement.textContent = percentage;
-        }
-
-        // Update focus status indicator
-        const focusStatus = document.getElementById('focus-status');
-        const trackingIndicator = document.getElementById('tracking-indicator');
-
-        if (focusStatus && trackingIndicator) {
-            if (this.timers.isCurrentlyFocused) {
-                focusStatus.textContent = 'Focused';
-                focusStatus.className = 'text-green-400';
-                trackingIndicator.className = 'w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5';
-            } else {
-                focusStatus.textContent = 'Unfocused';
-                focusStatus.className = 'text-red-400';
-                trackingIndicator.className = 'w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5';
-            }
-        }
-    }
-
-    handleFocusChange(isFocused) {
-        const now = Date.now();
-
-        if (isFocused && !this.timers.isCurrentlyFocused) {
-            // User just became focused
-            console.log('👁️ User became focused');
-
-            // End unfocus period if active
-            if (this.timers.currentUnfocusStart) {
-                const unfocusDuration = Math.floor((now - this.timers.currentUnfocusStart) / 1000);
-                this.timers.baseUnfocusedTime = (this.timers.baseUnfocusedTime || 0) + unfocusDuration;
-                this.timers.currentUnfocusStart = null;
-            }
-
-            // Start focus period
-            this.timers.currentFocusStart = now;
-            this.timers.baseFocusedTime = this.timers.focusedTime;
-            this.timers.isCurrentlyFocused = true;
-
-        } else if (!isFocused && this.timers.isCurrentlyFocused) {
-            // User just became unfocused
-            console.log('👁️ User became unfocused');
-
-            // End focus period if active
-            if (this.timers.currentFocusStart) {
-                const focusDuration = Math.floor((now - this.timers.currentFocusStart) / 1000);
-                this.timers.baseFocusedTime = (this.timers.baseFocusedTime || 0) + focusDuration;
-                this.timers.currentFocusStart = null;
-            }
-
-            // Start unfocus period
-            this.timers.currentUnfocusStart = now;
-            this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
+        initializeTimers() {
+            console.log('⏱️ Initializing timer system...');
+            this.timers.sessionStart = Date.now();
+            this.timers.sessionTime = 0;
+            this.timers.focusedTime = 0;
+            this.timers.unfocusedTime = 0;
             this.timers.isCurrentlyFocused = false;
-        } else if (!isFocused && !this.timers.isCurrentlyFocused && !this.timers.currentUnfocusStart) {
-            // Initial or continued unfocused state; ensure timers capture it
-            this.timers.currentUnfocusStart = now;
-            this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
+            this.timers.baseFocusedTime = 0;
+            this.timers.baseUnfocusedTime = 0;
+            this.timers.currentFocusStart = null;
+            this.timers.currentUnfocusStart = null;
+
+            // Start the timer update loop
+            this.startTimerUpdates();
         }
-    }
+
+        startTimerUpdates() {
+            // Update timers every 100ms for smooth display
+            this.timerInterval = setInterval(() => {
+                this.updateTimers();
+            }, 100);
+        }
+
+        updateTimers() {
+            if (!this.timers.sessionStart) return;
+
+            const now = Date.now();
+            this.timers.sessionTime = Math.floor((now - this.timers.sessionStart) / 1000);
+
+            // Update focus/unfocus timers based on current state
+            if (this.timers.isCurrentlyFocused && this.timers.currentFocusStart) {
+                const additionalFocusTime = Math.floor((now - this.timers.currentFocusStart) / 1000);
+                this.timers.focusedTime = this.timers.baseFocusedTime + additionalFocusTime;
+            } else if (!this.timers.isCurrentlyFocused && this.timers.currentUnfocusStart) {
+                const additionalUnfocusTime = Math.floor((now - this.timers.currentUnfocusStart) / 1000);
+                this.timers.unfocusedTime = this.timers.baseUnfocusedTime + additionalUnfocusTime;
+            }
+
+            // Update the display
+            this.updateTimerDisplay();
+        }
+
+        updateTimerDisplay() {
+            // Update session time
+            const sessionTimeElement = document.getElementById('session-time');
+            if (sessionTimeElement) {
+                sessionTimeElement.textContent = this.timers.sessionTime;
+            }
+
+            // Update focused time
+            const focusTimeElement = document.getElementById('focus-time');
+            if (focusTimeElement) {
+                focusTimeElement.textContent = this.timers.focusedTime;
+            }
+
+            // Update unfocused time
+            const unfocusTimeElement = document.getElementById('unfocus-time');
+            if (unfocusTimeElement) {
+                unfocusTimeElement.textContent = this.timers.unfocusedTime;
+            }
+
+            // Update focus percentage
+            const focusPercentageElement = document.getElementById('focus-percentage');
+            if (focusPercentageElement) {
+                const totalActiveTime = this.timers.focusedTime + this.timers.unfocusedTime;
+                const percentage = totalActiveTime > 0 ? Math.round((this.timers.focusedTime / totalActiveTime) * 100) : 0;
+                focusPercentageElement.textContent = percentage;
+            }
+
+            // Update focus status indicator
+            const focusStatus = document.getElementById('focus-status');
+            const trackingIndicator = document.getElementById('tracking-indicator');
+
+            if (focusStatus && trackingIndicator) {
+                if (this.timers.isCurrentlyFocused) {
+                    focusStatus.textContent = 'Focused';
+                    focusStatus.className = 'text-green-400';
+                    trackingIndicator.className = 'w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5';
+                } else {
+                    focusStatus.textContent = 'Unfocused';
+                    focusStatus.className = 'text-red-400';
+                    trackingIndicator.className = 'w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5';
+                }
+            }
+        }
+
+        handleFocusChange(isFocused) {
+            const now = Date.now();
+
+            if (isFocused && !this.timers.isCurrentlyFocused) {
+                // User just became focused
+                console.log('👁️ User became focused');
+
+                // End unfocus period if active
+                if (this.timers.currentUnfocusStart) {
+                    const unfocusDuration = Math.floor((now - this.timers.currentUnfocusStart) / 1000);
+                    this.timers.baseUnfocusedTime = (this.timers.baseUnfocusedTime || 0) + unfocusDuration;
+                    this.timers.currentUnfocusStart = null;
+                }
+
+                // Start focus period
+                this.timers.currentFocusStart = now;
+                this.timers.baseFocusedTime = this.timers.focusedTime;
+                this.timers.isCurrentlyFocused = true;
+
+            } else if (!isFocused && this.timers.isCurrentlyFocused) {
+                // User just became unfocused
+                console.log('👁️ User became unfocused');
+
+                // End focus period if active
+                if (this.timers.currentFocusStart) {
+                    const focusDuration = Math.floor((now - this.timers.currentFocusStart) / 1000);
+                    this.timers.baseFocusedTime = (this.timers.baseFocusedTime || 0) + focusDuration;
+                    this.timers.currentFocusStart = null;
+                }
+
+                // Start unfocus period
+                this.timers.currentUnfocusStart = now;
+                this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
+                this.timers.isCurrentlyFocused = false;
+            } else if (!isFocused && !this.timers.isCurrentlyFocused && !this.timers.currentUnfocusStart) {
+                // Initial or continued unfocused state; ensure timers capture it
+                this.timers.currentUnfocusStart = now;
+                this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
+            }
+        }
 
     async checkServiceHealth(quickCheck = false) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), quickCheck ? 2000 : 5000); // 2s for quick, 5s for normal
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), quickCheck ? 2000 : 5000); // 2s for quick, 5s for normal
 
-            const healthPaths = ['/healthz', '/api/health', '/health'];
-            let response = null;
-            let lastError = null;
+                const healthPaths = ['/healthz', '/api/health', '/health'];
+                let response = null;
+                let lastError = null;
 
-            for (const path of healthPaths) {
-                try {
-                    response = await fetch(`${this.pythonServiceUrl}${path}`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        signal: controller.signal
-                    });
-                    if (response.ok) {
-                        break;
+                for (const path of healthPaths) {
+                    try {
+                        response = await fetch(`${this.pythonServiceUrl}${path}`, {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            signal: controller.signal
+                        });
+                        if (response.ok) {
+                            break;
+                        }
+                    } catch (err) {
+                        lastError = err;
                     }
-                } catch (err) {
-                    lastError = err;
-                }
-            }
-
-            clearTimeout(timeoutId);
-
-            if (response && response.ok) {
-                let data = {};
-                try {
-                    data = await response.json();
-                } catch (parseError) {
-                    data = {};
                 }
 
-                if (typeof data.success === 'boolean') {
-                    this.isConnected = data.success;
-                } else if (data.status === 'ok' || data.status === 'healthy') {
-                    this.isConnected = true;
+                clearTimeout(timeoutId);
+
+                if (response && response.ok) {
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (parseError) {
+                        data = {};
+                    }
+
+                    if (typeof data.success === 'boolean') {
+                        this.isConnected = data.success;
+                    } else if (data.status === 'ok' || data.status === 'healthy') {
+                        this.isConnected = true;
+                    } else {
+                        this.isConnected = true;
+                    }
+                    if (data.version && !quickCheck) {
+                        console.log(`✅ Connected to Enhanced Eye Tracking Service ${data.version}`);
+                        console.log(`📋 Available features:`, data.features);
+                    }
+                    if (!quickCheck) console.log('✅ Python eye tracking service is running');
+                    return true;
                 } else {
-                    this.isConnected = true;
+                    console.log('❌ Python service responded with error');
+                    this.isConnected = false;
+                    return false;
                 }
-                if (data.version && !quickCheck) {
-                    console.log(`✅ Connected to Enhanced Eye Tracking Service ${data.version}`);
-                    console.log(`📋 Available features:`, data.features);
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log(`❌ Service health check timeout (${quickCheck ? '2s' : '5s'})`);
+                } else {
+                    console.log('❌ Cannot connect to Python eye tracking service:', error);
                 }
-                if (!quickCheck) console.log('✅ Python eye tracking service is running');
-                return true;
-            } else {
-                console.log('❌ Python service responded with error');
                 this.isConnected = false;
                 return false;
             }
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log(`❌ Service health check timeout (${quickCheck ? '2s' : '5s'})`);
-            } else {
-                console.log('❌ Cannot connect to Python eye tracking service:', error);
-            }
-            this.isConnected = false;
-            return false;
         }
-    }
 
     async startTracking() {
-        if (this.browserStreamingEnabled) {
-            this.isTracking = true;
-            return true;
-        }
+            if (this.browserStreamingEnabled) {
+                this.isTracking = true;
+                return true;
+            }
 
-        if (!this.isConnected) {
-            console.log('Cannot start tracking - service not connected');
-            return false;
-        }
-
-        try {
-            // Get user ID from session
-            const userId = await this.getCurrentUserId();
-
-            const response = await fetch(`${this.pythonServiceUrl}/api/start_tracking`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    module_id: this.moduleId,
-                    section_id: this.sectionId
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    this.isTracking = true;
-                    this.countdownActive = true;
-                    console.log(`🎯 Enhanced eye tracking started with ${data.countdown_duration}s countdown`);
-                    return true;
-                } else {
-                    console.error('Failed to start tracking:', data.error);
-                    return false;
-                }
-            } else {
-                console.error('HTTP error starting tracking:', response.status);
+            if (!this.isConnected) {
+                console.log('Cannot start tracking - service not connected');
                 return false;
             }
-        } catch (error) {
-            console.error('Error starting eye tracking:', error);
-            return false;
-        }
-    }
 
-    showCountdownNotification() {
-        // Create compact centered countdown overlay - services start during countdown
-        const countdownOverlay = document.createElement('div');
-        countdownOverlay.id = 'eye-tracking-countdown';
-        countdownOverlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50';
-        countdownOverlay.innerHTML = `
+            try {
+                // Get user ID from session
+                const userId = await this.getCurrentUserId();
+
+                const response = await fetch(`${this.pythonServiceUrl}/api/start_tracking`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        module_id: this.moduleId,
+                        section_id: this.sectionId
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        this.isTracking = true;
+                        this.countdownActive = true;
+                        console.log(`🎯 Enhanced eye tracking started with ${data.countdown_duration}s countdown`);
+                        return true;
+                    } else {
+                        console.error('Failed to start tracking:', data.error);
+                        return false;
+                    }
+                } else {
+                    console.error('HTTP error starting tracking:', response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error starting eye tracking:', error);
+                return false;
+            }
+        }
+
+        showCountdownNotification() {
+            // Create compact centered countdown overlay - services start during countdown
+            const countdownOverlay = document.createElement('div');
+            countdownOverlay.id = 'eye-tracking-countdown';
+            countdownOverlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50';
+            countdownOverlay.innerHTML = `
             <div class="bg-gray-800 text-white rounded-lg shadow-2xl p-6 text-center" style="width: 220px; height: 220px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
                 <!-- Header -->
                 <div class="flex items-center mb-3">
@@ -925,208 +873,208 @@ class CVEyeTrackingSystem {
                 </div>
             </div>
         `;
-        document.body.appendChild(countdownOverlay);
+            document.body.appendChild(countdownOverlay);
 
-        // Start countdown sequence: 3, 2, 1, rocket (services loading during countdown)
-        let secondsRemaining = 3;
-        const countdownNumber = document.getElementById('countdown-number');
-        const rocketIcon = document.getElementById('rocket-icon');
-        const statusText = document.getElementById('countdown-status');
+            // Start countdown sequence: 3, 2, 1, rocket (services loading during countdown)
+            let secondsRemaining = 3;
+            const countdownNumber = document.getElementById('countdown-number');
+            const rocketIcon = document.getElementById('rocket-icon');
+            const statusText = document.getElementById('countdown-status');
 
-        // Update countdown immediately for initial display
-        countdownNumber.textContent = secondsRemaining;
-        statusText.textContent = `Starting in ${secondsRemaining}...`;
+            // Update countdown immediately for initial display
+            countdownNumber.textContent = secondsRemaining;
+            statusText.textContent = `Starting in ${secondsRemaining}...`;
 
-        const countdownInterval = setInterval(() => {
-            secondsRemaining--;
+            const countdownInterval = setInterval(() => {
+                secondsRemaining--;
 
-            if (secondsRemaining > 0) {
-                // Update the display for remaining seconds
-                countdownNumber.textContent = secondsRemaining;
-                statusText.textContent = `Starting in ${secondsRemaining}...`;
-                console.log(`⏱️ Countdown: ${secondsRemaining} seconds remaining (services loading...)`);
-            } else {
-                // Show rocket and launch message - services should be ready now
-                console.log('🚀 Countdown complete - services fully operational!');
-                countdownNumber.classList.add('hidden');
-                rocketIcon.classList.remove('hidden');
-                rocketIcon.classList.add('animate-bounce');
-                statusText.textContent = 'Eye Tracking Active! 🚀';
+                if (secondsRemaining > 0) {
+                    // Update the display for remaining seconds
+                    countdownNumber.textContent = secondsRemaining;
+                    statusText.textContent = `Starting in ${secondsRemaining}...`;
+                    console.log(`⏱️ Countdown: ${secondsRemaining} seconds remaining (services loading...)`);
+                } else {
+                    // Show rocket and launch message - services should be ready now
+                    console.log('🚀 Countdown complete - services fully operational!');
+                    countdownNumber.classList.add('hidden');
+                    rocketIcon.classList.remove('hidden');
+                    rocketIcon.classList.add('animate-bounce');
+                    statusText.textContent = 'Eye Tracking Active! 🚀';
 
-                clearInterval(countdownInterval);
+                    clearInterval(countdownInterval);
 
-                // Remove countdown overlay after rocket shows
-                setTimeout(() => {
-                    if (countdownOverlay && countdownOverlay.parentNode) {
-                        countdownOverlay.remove();
-                    }
-                }, 1000); // Keep rocket visible for 1 second
-            }
-        }, 1000); // 1 second intervals
-    }
+                    // Remove countdown overlay after rocket shows
+                    setTimeout(() => {
+                        if (countdownOverlay && countdownOverlay.parentNode) {
+                            countdownOverlay.remove();
+                        }
+                    }, 1000); // Keep rocket visible for 1 second
+                }
+            }, 1000); // 1 second intervals
+        }
 
     async stopTracking() {
-        console.log('🛑 Stopping eye tracking...');
+            console.log('🛑 Stopping eye tracking...');
 
-        if (this.browserStreamingEnabled) {
-            this.stopLocalFrameStreaming();
-            this.stopBrowserCamera();
-            this.isTracking = false;
-            this.cleanupInterface();
-            this.stopDataSaving();
-            this.stopHealthMonitoring();
-            return;
-        }
+            if (this.browserStreamingEnabled) {
+                this.stopLocalFrameStreaming();
+                this.stopBrowserCamera();
+                this.isTracking = false;
+                this.cleanupInterface();
+                this.stopDataSaving();
+                this.stopHealthMonitoring();
+                return;
+            }
 
-        // Set transitioning flag to prevent video update errors
-        if (!this.isTransitioning) {
-            this.isTransitioning = true;
-        }
+            // Set transitioning flag to prevent video update errors
+            if (!this.isTransitioning) {
+                this.isTransitioning = true;
+            }
 
-        // Don't force disconnect - let service continue running for seamless transitions
-        const wasConnected = this.isConnected;
+            // Don't force disconnect - let service continue running for seamless transitions
+            const wasConnected = this.isConnected;
 
-        // Try to stop tracking on the service (but don't force disconnect)
-        if (this.isConnected && this.isTracking) {
-            try {
-                const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
+            // Try to stop tracking on the service (but don't force disconnect)
+            if (this.isConnected && this.isTracking) {
+                try {
+                    const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success) {
-                        console.log('⏹️ Enhanced eye tracking stopped on service');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            console.log('⏹️ Enhanced eye tracking stopped on service');
 
-                        // Display final metrics only if this was a true stop (not a transition)
-                        if (data.final_metrics && !this.isTransitioning) {
-                            console.log('📊 Final session metrics:', data.final_metrics);
-                            this.showFinalMetrics(data.final_metrics);
+                            // Display final metrics only if this was a true stop (not a transition)
+                            if (data.final_metrics && !this.isTransitioning) {
+                                console.log('📊 Final session metrics:', data.final_metrics);
+                                this.showFinalMetrics(data.final_metrics);
+                            }
                         }
                     }
+                } catch (error) {
+                    console.warn('⚠️ Error stopping tracking on service:', error);
                 }
-            } catch (error) {
-                console.warn('⚠️ Error stopping tracking on service:', error);
             }
+
+            // Clean up local state but preserve connection for seamless transitions
+            this.isTracking = false;
+            this.countdownActive = false;
+            // Don't force disconnect - keep connection alive: this.isConnected = false;
+
+            // Clear all intervals immediately to prevent connection errors
+            if (this.statusUpdateInterval) {
+                clearInterval(this.statusUpdateInterval);
+                this.statusUpdateInterval = null;
+            }
+
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+                this.timerInterval = null;
+            }
+
+            // Stop video updates immediately to prevent errors
+            this.stopVideoUpdates();
+
+            if (this.fullscreenVideoInterval) {
+                clearInterval(this.fullscreenVideoInterval);
+                this.fullscreenVideoInterval = null;
+            }
+
+            // Only stop health monitoring if this is a full shutdown
+            if (!this.isTransitioning) {
+                this.stopHealthMonitoring();
+                this.stopDataSaving();
+            }
+
+            // Clean up interface elements
+            this.cleanupInterface();
+
+            console.log('✅ Eye tracking stopped and cleaned up (connection preserved for transitions)');
+
+            // Reset transitioning flag after cleanup
+            setTimeout(() => {
+                this.isTransitioning = false;
+            }, 1000); // 1 second delay to ensure clean transition
         }
 
-        // Clean up local state but preserve connection for seamless transitions
-        this.isTracking = false;
-        this.countdownActive = false;
-        // Don't force disconnect - keep connection alive: this.isConnected = false;
+        cleanupInterface() {
+            // Remove tracking interface
+            const trackingInterface = document.getElementById('cv-eye-tracking-interface');
+            if (trackingInterface) {
+                trackingInterface.remove();
+                console.log('🗑️ Tracking interface removed');
+            }
 
-        // Clear all intervals immediately to prevent connection errors
-        if (this.statusUpdateInterval) {
-            clearInterval(this.statusUpdateInterval);
-            this.statusUpdateInterval = null;
+            // Remove any countdown overlay
+            const countdownOverlay = document.getElementById('eye-tracking-countdown');
+            if (countdownOverlay) {
+                countdownOverlay.remove();
+                console.log('🗑️ Countdown overlay removed');
+            }
+
+            // Remove any error notifications
+            const errorNotifications = document.querySelectorAll('[class*="eye-tracking-error"]');
+            errorNotifications.forEach(notification => {
+                notification.remove();
+            });
         }
 
-        if (this.timerInterval) {
-            clearInterval(this.timerInterval);
-            this.timerInterval = null;
+        // New method to clean up all intervals - prevents accumulation
+        cleanupAllIntervals() {
+            console.log('🧹 Cleaning up all intervals to prevent accumulation...');
+
+            if (this.statusUpdateInterval) {
+                clearInterval(this.statusUpdateInterval);
+                this.statusUpdateInterval = null;
+            }
+
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+                this.timerInterval = null;
+            }
+
+            if (this.videoUpdateInterval) {
+                clearInterval(this.videoUpdateInterval);
+                this.videoUpdateInterval = null;
+            }
+
+            if (this.videoWatchdog) {
+                clearInterval(this.videoWatchdog);
+                this.videoWatchdog = null;
+            }
+
+            if (this.fullscreenVideoInterval) {
+                clearInterval(this.fullscreenVideoInterval);
+                this.fullscreenVideoInterval = null;
+            }
+
+            if (this.healthMonitorInterval) {
+                clearInterval(this.healthMonitorInterval);
+                this.healthMonitorInterval = null;
+            }
+
+            if (this.dataSaveInterval) {
+                clearInterval(this.dataSaveInterval);
+                this.dataSaveInterval = null;
+            }
+
+            if (this.browserStreamingEnabled) {
+                this.stopLocalFrameStreaming();
+                this.stopBrowserCamera();
+            }
+
+            console.log('✅ All intervals cleaned up');
         }
 
-        // Stop video updates immediately to prevent errors
-        this.stopVideoUpdates();
-
-        if (this.fullscreenVideoInterval) {
-            clearInterval(this.fullscreenVideoInterval);
-            this.fullscreenVideoInterval = null;
-        }
-
-        // Only stop health monitoring if this is a full shutdown
-        if (!this.isTransitioning) {
-            this.stopHealthMonitoring();
-            this.stopDataSaving();
-        }
-
-        // Clean up interface elements
-        this.cleanupInterface();
-
-        console.log('✅ Eye tracking stopped and cleaned up (connection preserved for transitions)');
-
-        // Reset transitioning flag after cleanup
-        setTimeout(() => {
-            this.isTransitioning = false;
-        }, 1000); // 1 second delay to ensure clean transition
-    }
-
-    cleanupInterface() {
-        // Remove tracking interface
-        const trackingInterface = document.getElementById('cv-eye-tracking-interface');
-        if (trackingInterface) {
-            trackingInterface.remove();
-            console.log('🗑️ Tracking interface removed');
-        }
-
-        // Remove any countdown overlay
-        const countdownOverlay = document.getElementById('eye-tracking-countdown');
-        if (countdownOverlay) {
-            countdownOverlay.remove();
-            console.log('🗑️ Countdown overlay removed');
-        }
-
-        // Remove any error notifications
-        const errorNotifications = document.querySelectorAll('[class*="eye-tracking-error"]');
-        errorNotifications.forEach(notification => {
-            notification.remove();
-        });
-    }
-
-    // New method to clean up all intervals - prevents accumulation
-    cleanupAllIntervals() {
-        console.log('🧹 Cleaning up all intervals to prevent accumulation...');
-
-        if (this.statusUpdateInterval) {
-            clearInterval(this.statusUpdateInterval);
-            this.statusUpdateInterval = null;
-        }
-
-        if (this.timerInterval) {
-            clearInterval(this.timerInterval);
-            this.timerInterval = null;
-        }
-
-        if (this.videoUpdateInterval) {
-            clearInterval(this.videoUpdateInterval);
-            this.videoUpdateInterval = null;
-        }
-
-        if (this.videoWatchdog) {
-            clearInterval(this.videoWatchdog);
-            this.videoWatchdog = null;
-        }
-
-        if (this.fullscreenVideoInterval) {
-            clearInterval(this.fullscreenVideoInterval);
-            this.fullscreenVideoInterval = null;
-        }
-
-        if (this.healthMonitorInterval) {
-            clearInterval(this.healthMonitorInterval);
-            this.healthMonitorInterval = null;
-        }
-
-        if (this.dataSaveInterval) {
-            clearInterval(this.dataSaveInterval);
-            this.dataSaveInterval = null;
-        }
-
-        if (this.browserStreamingEnabled) {
-            this.stopLocalFrameStreaming();
-            this.stopBrowserCamera();
-        }
-
-        console.log('✅ All intervals cleaned up');
-    }
-
-    showFinalMetrics(metrics) {
-        const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 max-w-sm';
-        notification.innerHTML = `
+        showFinalMetrics(metrics) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 max-w-sm';
+            notification.innerHTML = `
             <div class="text-sm">
                 <div class="font-semibold mb-2">📊 Session Complete!</div>
                 <div class="space-y-1 text-xs">
@@ -1136,19 +1084,19 @@ class CVEyeTrackingSystem {
                 </div>
             </div>
         `;
-        document.body.appendChild(notification);
+            document.body.appendChild(notification);
 
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
-    }
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
 
-    showCameraShutdownNotification() {
-        const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 max-w-sm';
-        notification.innerHTML = `
+        showCameraShutdownNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 max-w-sm';
+            notification.innerHTML = `
             <div class="text-sm">
                 <div class="font-semibold mb-2">📹 Camera Shutting Down</div>
                 <div class="space-y-1 text-xs">
@@ -1158,129 +1106,129 @@ class CVEyeTrackingSystem {
                 </div>
             </div>
         `;
-        document.body.appendChild(notification);
+            document.body.appendChild(notification);
 
-        // Auto remove after 4 seconds
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
-    }
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
 
     async getCurrentUserId() {
-        // Try to get user ID from the page or make an API call
-        // This is a simplified version - you may need to adjust based on your session management
-        try {
-            const response = await fetch('database/get_current_user.php');
-            if (response.ok) {
-                const data = await response.json();
-                return data.user_id;
+            // Try to get user ID from the page or make an API call
+            // This is a simplified version - you may need to adjust based on your session management
+            try {
+                const response = await fetch('database/get_current_user.php');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.user_id;
+                }
+            } catch (error) {
+                console.log('Could not get user ID, using fallback');
             }
-        } catch (error) {
-            console.log('Could not get user ID, using fallback');
+
+            // Fallback: try to extract from global variables if available
+            if (typeof window.currentUserId !== 'undefined') {
+                return window.currentUserId;
+            }
+
+            // Default fallback (not ideal for production)
+            return 1;
         }
 
-        // Fallback: try to extract from global variables if available
-        if (typeof window.currentUserId !== 'undefined') {
-            return window.currentUserId;
+        setupStatusUpdates() {
+            if (this.browserStreamingEnabled) {
+                return;
+            }
+
+            // Check status every 2 seconds
+            this.statusUpdateInterval = setInterval(async () => {
+                await this.updateStatus();
+            }, 2000);
         }
-
-        // Default fallback (not ideal for production)
-        return 1;
-    }
-
-    setupStatusUpdates() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
-
-        // Check status every 2 seconds
-        this.statusUpdateInterval = setInterval(async () => {
-            await this.updateStatus();
-        }, 2000);
-    }
 
     async updateStatus() {
-        if (!this.isConnected) {
-            return;
-        }
+            if (!this.isConnected) {
+                return;
+            }
 
-        try {
-            const response = await fetch(`${this.pythonServiceUrl}/api/status`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    this.updateTrackingDisplay(data.status);
-
-                    // Handle focus changes
-                    if (data.status && typeof data.status.is_focused !== 'undefined') {
-                        this.handleFocusChange(data.status.is_focused);
+            try {
+                const response = await fetch(`${this.pythonServiceUrl}/api/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
                     }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        this.updateTrackingDisplay(data.status);
+
+                        // Handle focus changes
+                        if (data.status && typeof data.status.is_focused !== 'undefined') {
+                            this.handleFocusChange(data.status.is_focused);
+                        }
+                    }
+                } else {
+                    // Service not responding properly - reconnect
+                    this.handleServiceDisconnection();
                 }
-            } else {
-                // Service not responding properly - reconnect
+            } catch (error) {
+                // Network error - service might be down
                 this.handleServiceDisconnection();
             }
-        } catch (error) {
-            // Network error - service might be down
-            this.handleServiceDisconnection();
         }
-    }
 
-    handleServiceDisconnection() {
-        if (this.isConnected && !this.isTransitioning) {
-            console.warn('🔌 Eye tracking service disconnected - initiating recovery...');
-            this.isConnected = false;
+        handleServiceDisconnection() {
+            if (this.isConnected && !this.isTransitioning) {
+                console.warn('🔌 Eye tracking service disconnected - initiating recovery...');
+                this.isConnected = false;
 
-            // Temporarily pause video updates to prevent connection spam
-            this.stopVideoUpdates();
+                // Temporarily pause video updates to prevent connection spam
+                this.stopVideoUpdates();
 
-            // Don't stop video updates immediately - let health monitor handle reconnection
-            console.log('🔄 Health monitor will attempt automatic reconnection');
+                // Don't stop video updates immediately - let health monitor handle reconnection
+                console.log('🔄 Health monitor will attempt automatic reconnection');
 
-            // Reset reconnection attempts counter for fresh start
-            this.reconnectionAttempts = 0;
+                // Reset reconnection attempts counter for fresh start
+                this.reconnectionAttempts = 0;
 
-            // Restart video updates after a brief pause (to prevent spam)
-            setTimeout(() => {
-                if (this.isConnected && !this.isTransitioning) {
-                    console.log('🔄 Restarting video updates after reconnection pause');
-                    this.startVideoUpdates();
-                }
-            }, 2000); // 2 second pause
+                // Restart video updates after a brief pause (to prevent spam)
+                setTimeout(() => {
+                    if (this.isConnected && !this.isTransitioning) {
+                        console.log('🔄 Restarting video updates after reconnection pause');
+                        this.startVideoUpdates();
+                    }
+                }, 2000); // 2 second pause
+            }
         }
-    }
 
-    displayTrackingInterface(options = {}) {
-        const { useLocalVideo = false } = options;
+        displayTrackingInterface(options = {}) {
+            const { useLocalVideo = false } = options;
 
-        // Create the compact interface
-        const trackingContainer = document.createElement('div');
-        trackingContainer.id = 'cv-eye-tracking-interface';
+            // Create the compact interface
+            const trackingContainer = document.createElement('div');
+            trackingContainer.id = 'cv-eye-tracking-interface';
 
-        const displayMarkup = `
+            const displayMarkup = `
             <img id="tracking-video" 
                  style="width: 100%; height: 100px; display: block; background: #000;"
                  class="rounded-b-lg"
                  alt="Live camera feed">
         `;
 
-        const captureMarkup = useLocalVideo
-            ? `<video id="tracking-video-source"
+            const captureMarkup = useLocalVideo
+                ? `<video id="tracking-video-source"
                       autoplay
                       muted
                       playsinline
                       style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;"
                       tabindex="-1"></video>`
-            : '';
+                : '';
 
-        trackingContainer.innerHTML = `
+            trackingContainer.innerHTML = `
             <div class="fixed top-20 right-4 bg-black text-white shadow-2xl rounded-lg border border-gray-600 z-50" style="width: 180px; font-family: system-ui;">
                 <!-- Header with red dot and "Eye Tracking" -->
                 <div class="px-2 py-1.5 border-b border-gray-600">
@@ -1319,431 +1267,431 @@ class CVEyeTrackingSystem {
             </div>
         `;
 
-        document.body.appendChild(trackingContainer);
+            document.body.appendChild(trackingContainer);
 
-        // Verify the interface was created correctly
-        setTimeout(() => {
-            const videoElement = this.getWidgetVideoElement();
-            console.log('🔍 Interface verification:', {
-                container: !!document.getElementById('cv-eye-tracking-interface'),
-                videoElement: !!videoElement,
-                videoElementVisible: videoElement ? window.getComputedStyle(videoElement).display !== 'none' : false,
-                videoElementType: videoElement ? videoElement.tagName : null
-            });
-        }, 100);
+            // Verify the interface was created correctly
+            setTimeout(() => {
+                const videoElement = this.getWidgetVideoElement();
+                console.log('🔍 Interface verification:', {
+                    container: !!document.getElementById('cv-eye-tracking-interface'),
+                    videoElement: !!videoElement,
+                    videoElementVisible: videoElement ? window.getComputedStyle(videoElement).display !== 'none' : false,
+                    videoElementType: videoElement ? videoElement.tagName : null
+                });
+            }, 100);
 
-        if (useLocalVideo) {
-            const videoElement = this.getCaptureVideoElement();
-            if (videoElement) {
-                videoElement.muted = true;
-                videoElement.playsInline = true;
-            }
-        } else {
-            // Start video updates immediately
-            this.startVideoUpdates();
-        }
-
-        // Ensure video element is visible and properly configured
-        setTimeout(() => {
-            const videoElement = this.getWidgetVideoElement();
-            if (videoElement) {
-                videoElement.style.display = 'block';
-                videoElement.style.opacity = '1';
-                videoElement.style.width = '100%';
-                videoElement.style.height = '100px';
-                videoElement.style.objectFit = 'cover';
-
-                // Add error handler to show placeholder if image fails to load
-                videoElement.onerror = () => {
-                    console.warn('⚠️ Frame image failed to load, showing placeholder');
-                    // Keep trying - don't show placeholder as it will keep retrying
-                };
-
-                // Add load handler to confirm image loaded
-                videoElement.onload = () => {
-                    if (Math.random() < 0.1) {
-                        console.log('✅ Frame image loaded successfully');
-                    }
-                };
-            }
-        }, 100);
-
-        console.log('📺 Eye tracking interface displayed - exact format from image');
-    }
-
-    startVideoUpdates() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
-
-        console.log('🎬 Starting video updates...');
-
-        if (this.videoUpdateInterval) {
-            console.log('⚠️ Video already running, clearing previous interval');
-            clearInterval(this.videoUpdateInterval);
-        }
-
-        // Use SAME frequency as working test
-        this.videoUpdateInterval = setInterval(async () => {
-            await this.updateVideoFrame();
-        }, 100); // Update every 100ms for 10 FPS - EXACT same as test
-
-        console.log('✅ Video update interval started (100ms = 10 FPS - same as working test)');
-
-        // Add a watchdog to ensure video keeps running
-        this.startVideoWatchdog();
-    }
-
-    startVideoWatchdog() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
-
-        // Simple watchdog - just check if element exists (like test file simplicity)
-        this.videoWatchdog = setInterval(() => {
-            const videoElement = document.getElementById('tracking-video');
-            if (videoElement && this.isConnected) {
-                // Only check if element is still in DOM
-                if (!videoElement.parentNode) {
-                    console.warn('⚠️ Video element lost - reinitializing...');
-                    this.stopVideoUpdates();
-                    this.startVideoUpdates();
+            if (useLocalVideo) {
+                const videoElement = this.getCaptureVideoElement();
+                if (videoElement) {
+                    videoElement.muted = true;
+                    videoElement.playsInline = true;
                 }
+            } else {
+                // Start video updates immediately
+                this.startVideoUpdates();
             }
-        }, 5000); // Check every 5 seconds - less aggressive
-    }
 
-    stopVideoUpdates() {
-        if (this.videoUpdateInterval) {
-            clearInterval(this.videoUpdateInterval);
-            this.videoUpdateInterval = null;
+            // Ensure video element is visible and properly configured
+            setTimeout(() => {
+                const videoElement = this.getWidgetVideoElement();
+                if (videoElement) {
+                    videoElement.style.display = 'block';
+                    videoElement.style.opacity = '1';
+                    videoElement.style.width = '100%';
+                    videoElement.style.height = '100px';
+                    videoElement.style.objectFit = 'cover';
+
+                    // Add error handler to show placeholder if image fails to load
+                    videoElement.onerror = () => {
+                        console.warn('⚠️ Frame image failed to load, showing placeholder');
+                        // Keep trying - don't show placeholder as it will keep retrying
+                    };
+
+                    // Add load handler to confirm image loaded
+                    videoElement.onload = () => {
+                        if (Math.random() < 0.1) {
+                            console.log('✅ Frame image loaded successfully');
+                        }
+                    };
+                }
+            }, 100);
+
+            console.log('📺 Eye tracking interface displayed - exact format from image');
         }
 
-        if (this.videoWatchdog) {
-            clearInterval(this.videoWatchdog);
-            this.videoWatchdog = null;
+        startVideoUpdates() {
+            if (this.browserStreamingEnabled) {
+                return;
+            }
+
+            console.log('🎬 Starting video updates...');
+
+            if (this.videoUpdateInterval) {
+                console.log('⚠️ Video already running, clearing previous interval');
+                clearInterval(this.videoUpdateInterval);
+            }
+
+            // Use SAME frequency as working test
+            this.videoUpdateInterval = setInterval(async () => {
+                await this.updateVideoFrame();
+            }, 100); // Update every 100ms for 10 FPS - EXACT same as test
+
+            console.log('✅ Video update interval started (100ms = 10 FPS - same as working test)');
+
+            // Add a watchdog to ensure video keeps running
+            this.startVideoWatchdog();
         }
-    }
+
+        startVideoWatchdog() {
+            if (this.browserStreamingEnabled) {
+                return;
+            }
+
+            // Simple watchdog - just check if element exists (like test file simplicity)
+            this.videoWatchdog = setInterval(() => {
+                const videoElement = document.getElementById('tracking-video');
+                if (videoElement && this.isConnected) {
+                    // Only check if element is still in DOM
+                    if (!videoElement.parentNode) {
+                        console.warn('⚠️ Video element lost - reinitializing...');
+                        this.stopVideoUpdates();
+                        this.startVideoUpdates();
+                    }
+                }
+            }, 5000); // Check every 5 seconds - less aggressive
+        }
+
+        stopVideoUpdates() {
+            if (this.videoUpdateInterval) {
+                clearInterval(this.videoUpdateInterval);
+                this.videoUpdateInterval = null;
+            }
+
+            if (this.videoWatchdog) {
+                clearInterval(this.videoWatchdog);
+                this.videoWatchdog = null;
+            }
+        }
 
     // SIMPLIFIED updateVideoFrame method - WITH CONNECTION ERROR HANDLING
     async updateVideoFrame() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
+            if (this.browserStreamingEnabled) {
+                return;
+            }
 
-        if (!this.isConnected || this.isTransitioning) {
-            return; // Skip updates during transitions or when disconnected
-        }
+            if (!this.isConnected || this.isTransitioning) {
+                return; // Skip updates during transitions or when disconnected
+            }
 
-        try {
-            const response = await fetch(`${this.pythonServiceUrl}/api/frame`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                cache: 'no-cache' // Prevent caching
-            });
+            try {
+                const response = await fetch(`${this.pythonServiceUrl}/api/frame`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    cache: 'no-cache' // Prevent caching
+                });
 
-            if (response.ok) {
-                const data = await response.json();
+                if (response.ok) {
+                    const data = await response.json();
 
-                // Use the EXACT same logic as the working test
-                if (data.hasFrame && data.frameData && data.frameData.length > 0) {
-                    const videoElement = this.getWidgetVideoElement();
-                    if (videoElement) {
-                        // Force image reload by adding timestamp to prevent caching
-                        const timestamp = Date.now();
-                        const separator = data.frameData.includes('?') ? '&' : '?';
-                        videoElement.src = data.frameData + separator + '_t=' + timestamp;
+                    // Use the EXACT same logic as the working test
+                    if (data.hasFrame && data.frameData && data.frameData.length > 0) {
+                        const videoElement = this.getWidgetVideoElement();
+                        if (videoElement) {
+                            // Force image reload by adding timestamp to prevent caching
+                            const timestamp = Date.now();
+                            const separator = data.frameData.includes('?') ? '&' : '?';
+                            videoElement.src = data.frameData + separator + '_t=' + timestamp;
 
-                        // Ensure image is visible
-                        videoElement.style.display = 'block';
-                        videoElement.style.opacity = '1';
+                            // Ensure image is visible
+                            videoElement.style.display = 'block';
+                            videoElement.style.opacity = '1';
 
-                        // Update frame tracking (simplified)
-                        this.frameCount++;
-                        this.lastFrameTime = Date.now();
-                        this.consecutiveFrameFailures = 0;
+                            // Update frame tracking (simplified)
+                            this.frameCount++;
+                            this.lastFrameTime = Date.now();
+                            this.consecutiveFrameFailures = 0;
 
-                        // Log success occasionally - same as test
-                        if (Math.random() < 0.1) { // 10% chance like test
-                            console.log(`✅ Frame updated (${data.frameData.length} chars)`);
+                            // Log success occasionally - same as test
+                            if (Math.random() < 0.1) { // 10% chance like test
+                                console.log(`✅ Frame updated (${data.frameData.length} chars)`);
+                            }
+                        } else {
+                            console.warn('⚠️ Video element not found');
                         }
                     } else {
-                        console.warn('⚠️ Video element not found');
+                        this.consecutiveFrameFailures++;
+                        if (Math.random() < 0.05) { // Reduced logging to 5% to avoid spam
+                            console.log(`⚠️ No frame data: hasFrame=${data.hasFrame}, frameData length=${data.frameData?.length || 0}`);
+                        }
                     }
                 } else {
+                    // Handle HTTP errors more gracefully
                     this.consecutiveFrameFailures++;
-                    if (Math.random() < 0.05) { // Reduced logging to 5% to avoid spam
-                        console.log(`⚠️ No frame data: hasFrame=${data.hasFrame}, frameData length=${data.frameData?.length || 0}`);
+                    if (response.status === 503 || response.status === 502) {
+                        // Service temporarily unavailable - don't spam logs
+                        if (Math.random() < 0.01) { // Only log 1% of the time
+                            console.log(`⚠️ Service temporarily unavailable: ${response.status}`);
+                        }
+                    } else {
+                        if (Math.random() < 0.1) { // 10% chance for other errors
+                            console.log(`❌ Frame request failed: ${response.status}`);
+                        }
+                    }
+
+                    // If too many consecutive failures, mark as disconnected
+                    if (this.consecutiveFrameFailures > 10) {
+                        console.warn('🔌 Too many frame failures, marking as disconnected');
+                        this.handleServiceDisconnection();
                     }
                 }
-            } else {
-                // Handle HTTP errors more gracefully
+            } catch (error) {
                 this.consecutiveFrameFailures++;
-                if (response.status === 503 || response.status === 502) {
-                    // Service temporarily unavailable - don't spam logs
-                    if (Math.random() < 0.01) { // Only log 1% of the time
-                        console.log(`⚠️ Service temporarily unavailable: ${response.status}`);
+
+                // Handle connection errors more gracefully
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    // Connection refused - service is down
+                    if (Math.random() < 0.01) { // Only log 1% of connection errors to avoid spam
+                        console.log(`⚠️ Service connection lost (attempt ${this.consecutiveFrameFailures})`);
+                    }
+
+                    // If too many consecutive failures, trigger reconnection
+                    if (this.consecutiveFrameFailures > 5) {
+                        console.warn('🔌 Multiple connection failures, triggering service health check');
+                        this.handleServiceDisconnection();
                     }
                 } else {
-                    if (Math.random() < 0.1) { // 10% chance for other errors
-                        console.log(`❌ Frame request failed: ${response.status}`);
+                    // Other errors - log occasionally
+                    if (Math.random() < 0.1) {
+                        console.log(`❌ Frame update error: ${error.message}`);
                     }
                 }
-
-                // If too many consecutive failures, mark as disconnected
-                if (this.consecutiveFrameFailures > 10) {
-                    console.warn('🔌 Too many frame failures, marking as disconnected');
-                    this.handleServiceDisconnection();
-                }
             }
-        } catch (error) {
-            this.consecutiveFrameFailures++;
+        }
 
-            // Handle connection errors more gracefully
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                // Connection refused - service is down
-                if (Math.random() < 0.01) { // Only log 1% of connection errors to avoid spam
-                    console.log(`⚠️ Service connection lost (attempt ${this.consecutiveFrameFailures})`);
-                }
+        updateTrackingDisplay(status) {
+            const indicator = document.getElementById('tracking-indicator');
+            const focusStatus = document.getElementById('focus-status');
+            const focusTime = document.getElementById('focus-time');
+            const sessionTime = document.getElementById('session-time');
+            const focusPercentage = document.getElementById('focus-percentage');
+            const unfocusTime = document.getElementById('unfocus-time');
 
-                // If too many consecutive failures, trigger reconnection
-                if (this.consecutiveFrameFailures > 5) {
-                    console.warn('🔌 Multiple connection failures, triggering service health check');
-                    this.handleServiceDisconnection();
-                }
+            if (!indicator || !focusStatus || !focusTime || !sessionTime || !focusPercentage || !unfocusTime) {
+                return;
+            }
+
+            // Update tracking state and metrics
+            if (status.metrics) {
+                this.metrics = status.metrics;
+            }
+
+            this.trackingState = status.tracking_state || 'idle';
+
+            // Update indicator color based on tracking state
+            if (status.countdown_active) {
+                indicator.className = 'w-2 h-2 rounded-full bg-blue-500 mr-2 animate-pulse';
+            } else if (status.is_tracking_enabled && status.tracking_state === 'tracking') {
+                indicator.className = status.is_focused ?
+                    'w-2 h-2 rounded-full bg-green-500 mr-2' :
+                    'w-2 h-2 rounded-full bg-red-500 mr-2';
             } else {
-                // Other errors - log occasionally
-                if (Math.random() < 0.1) {
-                    console.log(`❌ Frame update error: ${error.message}`);
-                }
+                indicator.className = 'w-2 h-2 rounded-full bg-gray-500 mr-2';
+            }
+
+            // Update focus status (matches the image exactly)
+            focusStatus.textContent = status.is_focused ? 'Focused' : 'Unfocused';
+
+            // Update all metrics to match the image format
+            if (status.metrics) {
+                focusTime.textContent = Math.floor(status.metrics.focused_time || 0);
+                sessionTime.textContent = Math.floor(status.metrics.total_time || 0);
+                focusPercentage.textContent = Math.floor(status.metrics.focus_percentage || 0);
+                unfocusTime.textContent = Math.floor(status.metrics.unfocused_time || 0);
             }
         }
-    }
 
-    updateTrackingDisplay(status) {
-        const indicator = document.getElementById('tracking-indicator');
-        const focusStatus = document.getElementById('focus-status');
-        const focusTime = document.getElementById('focus-time');
-        const sessionTime = document.getElementById('session-time');
-        const focusPercentage = document.getElementById('focus-percentage');
-        const unfocusTime = document.getElementById('unfocus-time');
+        startFullscreenVideoUpdates() {
+            if (this.browserStreamingEnabled) {
+                return;
+            }
 
-        if (!indicator || !focusStatus || !focusTime || !sessionTime || !focusPercentage || !unfocusTime) {
-            return;
+            console.log('🖥️ Starting fullscreen video updates...');
+
+            if (this.fullscreenVideoInterval) {
+                clearInterval(this.fullscreenVideoInterval);
+            }
+
+            this.fullscreenVideoInterval = setInterval(async () => {
+                await this.updateFullscreenVideoFrame();
+            }, 100); // Faster updates for fullscreen (100ms)
+
+            console.log('✅ Fullscreen video update interval started (100ms)');
         }
 
-        // Update tracking state and metrics
-        if (status.metrics) {
-            this.metrics = status.metrics;
+        stopFullscreenVideoUpdates() {
+            if (this.fullscreenVideoInterval) {
+                clearInterval(this.fullscreenVideoInterval);
+                this.fullscreenVideoInterval = null;
+                console.log('⏹️ Fullscreen video updates stopped');
+            }
         }
-
-        this.trackingState = status.tracking_state || 'idle';
-
-        // Update indicator color based on tracking state
-        if (status.countdown_active) {
-            indicator.className = 'w-2 h-2 rounded-full bg-blue-500 mr-2 animate-pulse';
-        } else if (status.is_tracking_enabled && status.tracking_state === 'tracking') {
-            indicator.className = status.is_focused ?
-                'w-2 h-2 rounded-full bg-green-500 mr-2' :
-                'w-2 h-2 rounded-full bg-red-500 mr-2';
-        } else {
-            indicator.className = 'w-2 h-2 rounded-full bg-gray-500 mr-2';
-        }
-
-        // Update focus status (matches the image exactly)
-        focusStatus.textContent = status.is_focused ? 'Focused' : 'Unfocused';
-
-        // Update all metrics to match the image format
-        if (status.metrics) {
-            focusTime.textContent = Math.floor(status.metrics.focused_time || 0);
-            sessionTime.textContent = Math.floor(status.metrics.total_time || 0);
-            focusPercentage.textContent = Math.floor(status.metrics.focus_percentage || 0);
-            unfocusTime.textContent = Math.floor(status.metrics.unfocused_time || 0);
-        }
-    }
-
-    startFullscreenVideoUpdates() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
-
-        console.log('🖥️ Starting fullscreen video updates...');
-
-        if (this.fullscreenVideoInterval) {
-            clearInterval(this.fullscreenVideoInterval);
-        }
-
-        this.fullscreenVideoInterval = setInterval(async () => {
-            await this.updateFullscreenVideoFrame();
-        }, 100); // Faster updates for fullscreen (100ms)
-
-        console.log('✅ Fullscreen video update interval started (100ms)');
-    }
-
-    stopFullscreenVideoUpdates() {
-        if (this.fullscreenVideoInterval) {
-            clearInterval(this.fullscreenVideoInterval);
-            this.fullscreenVideoInterval = null;
-            console.log('⏹️ Fullscreen video updates stopped');
-        }
-    }
 
     async updateFullscreenVideoFrame() {
-        if (this.browserStreamingEnabled) {
-            return;
-        }
-
-        if (!this.isConnected || this.isTransitioning) {
-            return; // Skip updates during transitions or when disconnected
-        }
-
-        try {
-            const response = await fetch(`${this.pythonServiceUrl}/api/frame?_=${Date.now()}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                // Use the same simple approach as the test file
-                if (data.hasFrame && data.frameData) {
-                    const fullscreenVideoElement = document.getElementById('fullscreen-video-feed');
-                    if (fullscreenVideoElement) {
-                        fullscreenVideoElement.src = data.frameData;
-                    }
-
-                    // Also update the small video if it's visible
-                    const videoElement = this.getWidgetVideoElement();
-                    if (videoElement) {
-                        videoElement.src = data.frameData;
-                    }
-                }
-            } else {
-                // Handle HTTP errors silently during transitions
-                if (Math.random() < 0.01 && !this.isTransitioning) { // Only log 1% of errors
-                    console.log(`⚠️ Fullscreen frame request failed: ${response.status}`);
-                }
+            if (this.browserStreamingEnabled) {
+                return;
             }
-        } catch (error) {
-            // Handle connection errors silently during transitions
-            if (Math.random() < 0.01 && !this.isTransitioning) { // Only log 1% of connection errors
-                isConnected: this.isConnected,
-                    isTracking: this.isTracking,
-                        totalTime: this.totalTime,
-                            moduleId: this.moduleId,
-                                sectionId: this.sectionId
-            };
-        }
+
+            if (!this.isConnected || this.isTransitioning) {
+                return; // Skip updates during transitions or when disconnected
+            }
+
+            try {
+                const response = await fetch(`${this.pythonServiceUrl}/api/frame?_=${Date.now()}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Use the same simple approach as the test file
+                    if (data.hasFrame && data.frameData) {
+                        const fullscreenVideoElement = document.getElementById('fullscreen-video-feed');
+                        if (fullscreenVideoElement) {
+                            fullscreenVideoElement.src = data.frameData;
+                        }
+
+                        // Also update the small video if it's visible
+                        const videoElement = this.getWidgetVideoElement();
+                        if (videoElement) {
+                            videoElement.src = data.frameData;
+                        }
+                    }
+                } else {
+                    // Handle HTTP errors silently during transitions
+                    if (Math.random() < 0.01 && !this.isTransitioning) { // Only log 1% of errors
+                        console.log(`⚠️ Fullscreen frame request failed: ${response.status}`);
+                    }
+                }
+            } catch (error) {
+                // Handle connection errors silently during transitions
+                if (Math.random() < 0.01 && !this.isTransitioning) { // Only log 1% of connection errors
+                    isConnected: this.isConnected,
+                        isTracking: this.isTracking,
+                            totalTime: this.totalTime,
+                                moduleId: this.moduleId,
+                                    sectionId: this.sectionId
+                };
+            }
 
     // Method to completely stop the service - FOR COURSE EXIT
     async stopService() {
-            console.log('🛑 Stopping eye tracking service completely (course exit)...');
+                console.log('🛑 Stopping eye tracking service completely (course exit)...');
 
-            this.isTransitioning = true; // Prevent any new operations
+                this.isTransitioning = true; // Prevent any new operations
 
-            // Save final session data before stopping
-            await this.saveSessionData();
+                // Save final session data before stopping
+                await this.saveSessionData();
 
-            try {
-                // Stop tracking on the service with final metrics
-                if (this.isConnected && this.isTracking) {
-                    try {
-                        const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            }
-                        });
+                try {
+                    // Stop tracking on the service with final metrics
+                    if (this.isConnected && this.isTracking) {
+                        try {
+                            const response = await fetch(`${this.pythonServiceUrl}/api/stop_tracking`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                }
+                            });
 
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success) {
-                                console.log('⏹️ Eye tracking stopped on service (course exit)');
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data.success) {
+                                    console.log('⏹️ Eye tracking stopped on service (course exit)');
 
-                                // Show final metrics for course exit
-                                if (data.final_metrics) {
-                                    console.log('📊 Final course metrics:', data.final_metrics);
-                                    this.showFinalMetrics(data.final_metrics);
+                                    // Show final metrics for course exit
+                                    if (data.final_metrics) {
+                                        console.log('📊 Final course metrics:', data.final_metrics);
+                                        this.showFinalMetrics(data.final_metrics);
+                                    }
                                 }
                             }
+                        } catch (error) {
+                            console.warn('⚠️ Error stopping service:', error);
                         }
-                    } catch (error) {
-                        console.warn('⚠️ Error stopping service:', error);
                     }
-                }
 
-                // CRITICAL: Shut down the camera service completely
-                if (this.isConnected) {
-                    try {
-                        console.log('📹 Shutting down camera service...');
-
-                        // Show immediate notification that camera is being shut down
-                        this.showCameraShutdownNotification();
-
-                        const shutdownResponse = await fetch(`${this.pythonServiceUrl}/api/shutdown`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            }
-                        });
-
-                        if (shutdownResponse.ok) {
-                            const shutdownData = await shutdownResponse.json();
-                            if (shutdownData.success) {
-                                console.log('📹 Camera service shut down successfully');
-                            } else {
-                                console.warn('⚠️ Camera shutdown response not successful:', shutdownData);
-                            }
-                        } else {
-                            console.warn('⚠️ Camera shutdown HTTP error:', shutdownResponse.status);
-                        }
-                    } catch (shutdownError) {
-                        console.warn('⚠️ Error shutting down camera service:', shutdownError);
-
-                        // Fallback: Try alternative shutdown endpoint
+                    // CRITICAL: Shut down the camera service completely
+                    if (this.isConnected) {
                         try {
-                            console.log('📹 Trying alternative camera shutdown...');
-                            await fetch(`${this.pythonServiceUrl}/api/stop`, {
+                            console.log('📹 Shutting down camera service...');
+
+                            // Show immediate notification that camera is being shut down
+                            this.showCameraShutdownNotification();
+
+                            const shutdownResponse = await fetch(`${this.pythonServiceUrl}/api/shutdown`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' }
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                }
                             });
-                            console.log('📹 Alternative camera shutdown attempted');
-                        } catch (fallbackError) {
-                            console.warn('⚠️ Alternative shutdown also failed:', fallbackError);
+
+                            if (shutdownResponse.ok) {
+                                const shutdownData = await shutdownResponse.json();
+                                if (shutdownData.success) {
+                                    console.log('📹 Camera service shut down successfully');
+                                } else {
+                                    console.warn('⚠️ Camera shutdown response not successful:', shutdownData);
+                                }
+                            } else {
+                                console.warn('⚠️ Camera shutdown HTTP error:', shutdownResponse.status);
+                            }
+                        } catch (shutdownError) {
+                            console.warn('⚠️ Error shutting down camera service:', shutdownError);
+
+                            // Fallback: Try alternative shutdown endpoint
+                            try {
+                                console.log('📹 Trying alternative camera shutdown...');
+                                await fetch(`${this.pythonServiceUrl}/api/stop`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' }
+                                });
+                                console.log('📹 Alternative camera shutdown attempted');
+                            } catch (fallbackError) {
+                                console.warn('⚠️ Alternative shutdown also failed:', fallbackError);
+                            }
                         }
                     }
+
+                    // Force disconnect from service
+                    this.isConnected = false;
+                    this.isTracking = false;
+                    this.countdownActive = false;
+
+                    if (this.browserStreamingEnabled) {
+                        this.stopLocalFrameStreaming();
+                        this.stopBrowserCamera();
+                    }
+
+                    // Clean up all intervals and monitoring
+                    this.cleanupAllIntervals();
+                    this.stopHealthMonitoring();
+                    this.stopDataSaving();
+
+                    // Clean up interface elements
+                    this.cleanupInterface();
+
+                    console.log('✅ Eye tracking service and camera completely stopped');
+
+                } catch (error) {
+                    console.error('❌ Error during service stop:', error);
+                } finally {
+                    this.isTransitioning = false;
                 }
-
-                // Force disconnect from service
-                this.isConnected = false;
-                this.isTracking = false;
-                this.countdownActive = false;
-
-                if (this.browserStreamingEnabled) {
-                    this.stopLocalFrameStreaming();
-                    this.stopBrowserCamera();
-                }
-
-                // Clean up all intervals and monitoring
-                this.cleanupAllIntervals();
-                this.stopHealthMonitoring();
-                this.stopDataSaving();
-
-                // Clean up interface elements
-                this.cleanupInterface();
-
-                console.log('✅ Eye tracking service and camera completely stopped');
-
-            } catch (error) {
-                console.error('❌ Error during service stop:', error);
-            } finally {
-                this.isTransitioning = false;
             }
-        }
 
     // Static method to handle course exit - COMPLETE SERVICE SHUTDOWN
     static async handleCourseExit() {
