@@ -6,8 +6,14 @@
 CAMERA_ENABLED = "false"
 
 [phases.setup]
-# Install minimal system dependencies for Python
-nixPkgs = ["python312"]
+# Install system dependencies required by OpenCV
+nixPkgs = [
+  "python312",
+  "libGL",
+  "libglvnd",
+  "glib", 
+  "gcc"
+]
 # Create the virtual environment early so later phases can rely on it
 cmds = [
   "python3 -m venv /opt/venv",
@@ -17,9 +23,9 @@ cmds = [
 [phases.install]
 dependsOn = ["setup"]
 cmds = [
-  "/opt/venv/bin/pip install --no-cache-dir --force-reinstall -c constraints.txt -r requirements.txt"
+  "/opt/venv/bin/pip install --no-cache-dir -r requirements.txt"
 ]
 
 [start]
-# Start the FastAPI eye tracking service using uvicorn and PORT variable from Railway
-cmd = "/opt/venv/bin/python -m uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1"
+# Set LD_LIBRARY_PATH at runtime and start FastAPI
+cmd = "LD_LIBRARY_PATH=/nix/store/*-libglvnd-*/lib:/nix/store/*-glib-*/lib:/nix/store/*-gcc-*/lib:$LD_LIBRARY_PATH /opt/venv/bin/python -m uvicorn fastapi_service:app --host 0.0.0.0 --port $PORT --workers 1"
