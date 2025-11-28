@@ -1,6 +1,15 @@
 <?php
 session_start();
 
+// Load environment configuration for dynamic service URLs
+$config = [];
+$python_service_url = 'http://127.0.0.1:5000';
+if (file_exists(__DIR__ . '/../config_environment.php')) {
+    $config = include __DIR__ . '/../config_environment.php';
+}
+$python_service_url = getenv('PYTHON_SERVICE_URL') ?: ($config['python_service_url'] ?? $python_service_url);
+$python_service_url = rtrim($python_service_url, '/');
+
 // Use centralized database connection
 require_once __DIR__ . '/../database/db_connection.php';
 $conn = getMysqliConnection();
@@ -1015,8 +1024,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="../src/output.css">
     <script>
         const currentCompletionPercentage = <?php echo json_encode($completion_percentage); ?>; //Tofu: pass completion percentage
+        window.PYTHON_SERVICE_URL = <?php echo json_encode($python_service_url); ?>;
     </script>
-        <script src="js/cv-eye-tracking.js?canvas_debug_<?php echo time(); ?>"></script>
+    <script src="js/cv-eye-tracking.js?canvas_debug_<?php echo time(); ?>"></script>
     <script>
         // Checkpoint Quiz Handler - Define early so it's available for inline onclick
         <?php if (($selected_checkpoint_quiz_id && isset($checkpoint_quiz)) || ($selected_section && isset($selected_section['is_checkpoint_quiz']) && $selected_section['is_checkpoint_quiz'] && isset($checkpoint_quiz))): ?>

@@ -5,6 +5,15 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Load environment configuration for dynamic service URLs
+$config = [];
+$python_service_url = 'http://127.0.0.1:5000';
+if (file_exists(__DIR__ . '/../config_environment.php')) {
+    $config = include __DIR__ . '/../config_environment.php';
+}
+$python_service_url = getenv('PYTHON_SERVICE_URL') ?: ($config['python_service_url'] ?? $python_service_url);
+$python_service_url = rtrim($python_service_url, '/');
+
 // Use centralized database connection
 require_once __DIR__ . '/../database/db_connection.php';
 $conn = getMysqliConnection();
@@ -192,6 +201,9 @@ function timeAgo($timestamp) {
     <script src="https://cdn.tailwindcss.com"></script>
   
             <!-- Enhanced CV Eye Tracking System -->
+        <script>
+            window.PYTHON_SERVICE_URL = <?php echo json_encode($python_service_url); ?>;
+        </script>
         <script src="js/cv-eye-tracking.js?service_reconnect_<?php echo time(); ?>"></script>
     <script>
         tailwind.config = {

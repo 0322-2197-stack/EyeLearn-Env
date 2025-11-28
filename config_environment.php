@@ -50,7 +50,7 @@ if ($environment === 'development') {
         'error_reporting' => E_ALL,
         'display_errors' => 1,
         'base_url' => 'http://localhost/capstone/',
-        'python_service_url' => 'http://localhost:5000'
+        'python_service_url' => getenv('PYTHON_SERVICE_URL') ?: 'http://127.0.0.1:5000'
     ];
 } else {
     // Production settings - prioritize environment variables (for Docker/Railway deployments)
@@ -63,7 +63,7 @@ if ($environment === 'development') {
         'error_reporting' => 0,
         'display_errors' => 0,
         'base_url' => 'https://yourdomain.com/',
-        'python_service_url' => 'http://localhost:5000'
+        'python_service_url' => getenv('PYTHON_SERVICE_URL') ?: 'http://127.0.0.1:5000'
     ];
 }
 

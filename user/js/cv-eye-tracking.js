@@ -16,6 +16,18 @@
  * - Nuclear reset: Complete cleanup when normal methods fail
  */
 
+const DEFAULT_PYTHON_SERVICE_URL = 'http://127.0.0.1:5000';
+
+function getGlobalPythonServiceUrl() {
+    if (typeof window !== 'undefined') {
+        const candidate = window.PYTHON_SERVICE_URL || window.pythonServiceUrl;
+        if (typeof candidate === 'string' && candidate.trim().length > 0) {
+            return candidate.replace(/\/$/, '');
+        }
+    }
+    return DEFAULT_PYTHON_SERVICE_URL;
+}
+
 class CVEyeTrackingSystem {
     constructor(moduleId, sectionId = null) {
         this.moduleId = moduleId;
@@ -23,7 +35,7 @@ class CVEyeTrackingSystem {
         this.isConnected = false;
         this.isTracking = false;
         this.dormantMode = false; // New dormant mode flag
-        this.pythonServiceUrl = 'http://127.0.0.1:5000';
+        this.pythonServiceUrl = getGlobalPythonServiceUrl();
         this.checkInterval = null;
         this.statusUpdateInterval = null;
         this.videoUpdateInterval = null;
@@ -1163,6 +1175,7 @@ class CVEyeTrackingSystem {
 
     showServiceError() {
         const errorContainer = document.createElement('div');
+        const serviceUrl = this.pythonServiceUrl || getGlobalPythonServiceUrl();
         errorContainer.innerHTML = `
             <div class="fixed top-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-sm z-50">
                 <div class="flex items-center mb-2">
@@ -1176,7 +1189,7 @@ class CVEyeTrackingSystem {
                     <ol class="list-decimal list-inside ml-2 space-y-1">
                         <li>Install Python dependencies (opencv, numpy, flask)</li>
                         <li>Run enhanced eye_tracking_service.py from python_services/</li>
-                        <li>Service should start on http://127.0.0.1:5000</li>
+                        <li>Service should start on ${serviceUrl}</li>
                         <li>Refresh this page</li>
                     </ol>
                     <p class="text-blue-600 mt-2">🎯 Features: 3s countdown, real-time focus tracking, detailed metrics</p>
@@ -1329,7 +1342,7 @@ class CVEyeTrackingSystem {
                 // Even if no tracker exists, try to shutdown any running camera service
                 try {
                     console.log('📹 Emergency camera shutdown (no active tracker)...');
-                    const pythonServiceUrl = 'http://127.0.0.1:5000';
+                    const pythonServiceUrl = getGlobalPythonServiceUrl();
                     
                     // Try multiple shutdown endpoints
                     const shutdownPromises = [
@@ -1367,7 +1380,7 @@ class CVEyeTrackingSystem {
                 // Emergency camera shutdown in force cleanup
                 try {
                     console.log('📹 Force emergency camera shutdown...');
-                    const pythonServiceUrl = 'http://127.0.0.1:5000';
+                    const pythonServiceUrl = getGlobalPythonServiceUrl();
                     
                     // Multiple shutdown attempts
                     await Promise.all([
