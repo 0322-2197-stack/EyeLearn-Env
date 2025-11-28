@@ -128,6 +128,13 @@ class CVEyeTrackingSystem {
         return document.getElementById('tracking-video');
     }
 
+    getCaptureVideoElement() {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        return document.getElementById('tracking-video-source') || this.getWidgetVideoElement();
+    }
+
     async init() {
         console.log(`🎯 Initializing Enhanced CV Eye Tracking System v2.5... (Instance: ${this.instanceId})`);
         console.log('Features: Instant activation, seamless transitions, crash-resistant switching');
@@ -263,7 +270,7 @@ class CVEyeTrackingSystem {
                 audio: false
             });
             
-            const videoElement = this.getWidgetVideoElement();
+            const videoElement = this.getCaptureVideoElement();
             if (videoElement) {
                 videoElement.srcObject = this.cameraStream;
                 videoElement.muted = true;
@@ -335,7 +342,7 @@ class CVEyeTrackingSystem {
             return;
         }
         
-            const videoElement = this.getWidgetVideoElement();
+        const videoElement = this.getCaptureVideoElement();
         if (!videoElement || videoElement.readyState < 2) {
             return;
         }
@@ -1182,17 +1189,22 @@ class CVEyeTrackingSystem {
         // Create the compact interface
         const trackingContainer = document.createElement('div');
         trackingContainer.id = 'cv-eye-tracking-interface';
-        const videoMarkup = useLocalVideo
-            ? `<video id="tracking-video"
+        
+        const displayMarkup = `
+            <img id="tracking-video" 
+                 style="width: 100%; height: 100px; display: block; background: #000;"
+                 class="rounded-b-lg"
+                 alt="Live camera feed">
+        `;
+        
+        const captureMarkup = useLocalVideo
+            ? `<video id="tracking-video-source"
                       autoplay
                       muted
                       playsinline
-                      style="width: 100%; height: 100px; display: block; background: #000;"
-                      class="rounded-b-lg"></video>`
-            : `<img id="tracking-video" 
-                     style="width: 100%; height: 100px; display: block; background: #000;"
-                     class="rounded-b-lg"
-                     alt="Live camera feed">`;
+                      style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;"
+                      tabindex="-1"></video>`
+            : '';
         
         trackingContainer.innerHTML = `
             <div class="fixed top-20 right-4 bg-black text-white shadow-2xl rounded-lg border border-gray-600 z-50" style="width: 180px; font-family: system-ui;">
@@ -1227,7 +1239,8 @@ class CVEyeTrackingSystem {
                 
                 <!-- Video feed container -->
                 <div class="relative bg-black">
-                    ${videoMarkup}
+                    ${displayMarkup}
+                    ${captureMarkup}
                 </div>
             </div>
         `;
@@ -1246,7 +1259,7 @@ class CVEyeTrackingSystem {
         }, 100);
         
         if (useLocalVideo) {
-            const videoElement = this.getWidgetVideoElement();
+            const videoElement = this.getCaptureVideoElement();
             if (videoElement) {
                 videoElement.muted = true;
                 videoElement.playsInline = true;
