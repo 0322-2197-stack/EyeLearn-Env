@@ -213,7 +213,7 @@ class CVEyeTrackingSystem {
         
         await this.checkServiceHealth(true);
         
-        this.displayTrackingInterface({ useLocalVideo: true });
+        this.displayTrackingInterface({ useLocalVideo: false });
         this.initializeTimers();
         this.handleFocusChange(false);
         this.isTracking = true;
@@ -382,6 +382,13 @@ class CVEyeTrackingSystem {
         this.latestBackendMetrics = result.metrics || null;
         if (result.metrics) {
             this.metrics = result.metrics;
+        }
+        
+        if (result.current_frame) {
+            const videoElement = this.getWidgetVideoElement();
+            if (videoElement && videoElement.tagName === 'IMG') {
+                videoElement.src = result.current_frame;
+            }
         }
         
         const statusPayload = result.status || {};
