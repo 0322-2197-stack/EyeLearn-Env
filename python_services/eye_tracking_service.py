@@ -132,19 +132,6 @@ class EyeTrackingService:
         """Create a real eye tracking system using MediaPipe"""
         import mediapipe as mp
         import math
-        
-        class MediaPipeTracker:
-            def __init__(self):
-                self.mp_face_mesh = mp.solutions.face_mesh
-                self.face_mesh = self.mp_face_mesh.FaceMesh(
-                    max_num_faces=1,
-                    refine_landmarks=True,
-                    min_detection_confidence=0.5,
-                    min_tracking_confidence=0.5
-                )
-                self.mp_drawing = mp.solutions.drawing_utils
-                self.mp_drawing_styles = mp.solutions.drawing_styles
-                
                 self.current_frame = None
                 self.annotated_frame = None
                 self.pupils_located = False
@@ -685,7 +672,7 @@ class EyeTrackingService:
         if self.tracking_state == "tracking":
             # Center focus zone (green if focused, red if not)
             center_x, center_y = width // 2, height // 2
-            zone_width, zone_height = int(width * 0.3), int(height * 0.3)
+            zone_width, zone_height = int(width * 0.4), int(height * 0.4)  # Larger zone for easier focus
             
             # Main focus zone (center)
             focus_color = (0, 255, 0) if self.is_focused else (0, 0, 255)
