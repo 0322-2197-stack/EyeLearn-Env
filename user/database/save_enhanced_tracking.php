@@ -100,8 +100,10 @@ try {
             created_at,
             last_updated,
             session_data
-        ) VALUES (?, ?, ?, ?, ?, ?, 'enhanced_cv_tracking', NOW(), NOW(), ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
     ";
+    
+    $session_type = $data['session_type'] ?? 'viewing'; // From Python service
     
     $insert_stmt = $conn->prepare($insert_sql);
     $insert_stmt->execute([
@@ -111,6 +113,7 @@ try {
         $total_time_seconds,
         $focused_time_seconds,
         $unfocused_time_seconds,
+        $session_type,  // Add session_type parameter
         $session_data
     ]);
     
