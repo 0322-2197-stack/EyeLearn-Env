@@ -215,6 +215,7 @@ class CVEyeTrackingSystem {
         
         this.displayTrackingInterface({ useLocalVideo: true });
         this.initializeTimers();
+        this.handleFocusChange(false);
         this.isTracking = true;
         
         // Resolve user context once for payloads
@@ -379,6 +380,9 @@ class CVEyeTrackingSystem {
     handleFrameResult(result) {
         this.isConnected = true;
         this.latestBackendMetrics = result.metrics || null;
+        if (result.metrics) {
+            this.metrics = result.metrics;
+        }
         
         const attentionScore = this.latestBackendMetrics && typeof this.latestBackendMetrics.attention_score === 'number'
             ? this.latestBackendMetrics.attention_score
@@ -667,6 +671,10 @@ class CVEyeTrackingSystem {
             this.timers.currentUnfocusStart = now;
             this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
             this.timers.isCurrentlyFocused = false;
+        } else if (!isFocused && !this.timers.isCurrentlyFocused && !this.timers.currentUnfocusStart) {
+            // Initial or continued unfocused state; ensure timers capture it
+            this.timers.currentUnfocusStart = now;
+            this.timers.baseUnfocusedTime = this.timers.unfocusedTime;
         }
     }
 

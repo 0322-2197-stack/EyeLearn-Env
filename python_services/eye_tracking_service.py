@@ -21,14 +21,14 @@ from flask_cors import CORS
 import logging
 
 # Configuration via environment variables (backward compatible)
-TRACKING_SAVE_URL = os.environ.get(
+DEFAULT_TRACKING_SAVE_URL = os.environ.get(
     "TRACKING_SAVE_URL",
     "http://localhost/capstone/user/database/save_enhanced_tracking.php"
 )
 
 # Camera enabled flag (defaults to enabled for backward compatibility)
 CAMERA_ENABLED_STR = os.environ.get("CAMERA_ENABLED", "1").lower()
-CAMERA_ENABLED = CAMERA_ENABLED_STR not in ("0", "false", "False")
+DEFAULT_CAMERA_ENABLED = CAMERA_ENABLED_STR not in ("0", "false", "False")
 
 # Custom JSON encoder for NumPy types
 class NumpyEncoder(json.JSONEncoder):
@@ -48,7 +48,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class EyeTrackingService:
-    def __init__(self):
+    def __init__(
+        self,
+        tracking_save_url: str | None = None,
+        camera_enabled: bool | None = None,
+        auto_start_loop: bool = True,
+    ):
         self.gaze = None
         self.webcam = None
         self.camera_initialized = False  # Track if camera is already initialized
@@ -63,6 +68,9 @@ class EyeTrackingService:
         self.current_user_id = None
         self.last_save_time = time.time()
         self.save_interval = 10  # Save every 10 seconds
+        self.auto_start_loop = auto_start_loop
+        self.tracking_save_url = tracking_save_url or DEFAULT_TRACKING_SAVE_URL
+        self.camera_enabled = DEFAULT_CAMERA_ENABLED if camera_enabled is None else camera_enabled
         
         # Enhanced tracking parameters
         self.center_threshold = 0.15  # Relaxed threshold for better detection
@@ -461,7 +469,7 @@ class EyeTrackingService:
         """Start the webcam for eye tracking with improved detection"""
         try:
             # Check if camera is disabled via environment variable
-            if not CAMERA_ENABLED:
+            if not self.camera_enabled:
                 logger.info("📹 Camera disabled via CAMERA_ENABLED environment variable - using fallback mode")
                 self.camera_initialized = False
                 self.webcam = None
@@ -838,6 +846,23 @@ class EyeTrackingService:
                 logger.info("User focused - tracking focus time")
             
             self.is_focused = smoothed_focus
+
+    def reset_session_state(self):
+        """Reset session tracking counters for a new module or remote session."""
+        self.accumulated_focused_time = 0
+        self.accumulated_unfocused_time = 0
+        self.focus_history = []
+        self.is_focused = False
+        self.current_focus_session_start = None
+        self.current_unfocus_session_start = None
+        self.session_data = {
+            'focus_sessions': [],
+            'unfocus_sessions': [],
+            'total_focused_time': 0,
+            'total_unfocused_time': 0,
+            'session_start': None
+        }
+        self.last_save_time = time.time()
     
     def start_countdown(self):
         """Start the 3-second countdown before tracking begins"""
@@ -933,7 +958,7 @@ class EyeTrackingService:
             try:
                 # Save to database using configurable URL
                 response = requests.post(
-                    TRACKING_SAVE_URL,
+                    self.tracking_save_url,
                     json=data,
                     timeout=5
                 )
@@ -1128,27 +1153,27 @@ class EyeTrackingService:
             return
         
         # Reset all counters for new module
-        self.accumulated_focused_time = 0
-        self.accumulated_unfocused_time = 0
-        self.session_data = {
-            'focus_sessions': [],
-            'unfocus_sessions': [],
-            'total_focused_time': 0,
-            'total_unfocused_time': 0,
-            'session_start': None
-        }
+        self.reset_session_state()
         
         self.is_tracking_enabled = True
-        
-        # Start with countdown only for new modules
-        self.start_countdown()
-        
-        # Start tracking in a separate thread
-        self.tracking_thread = threading.Thread(target=self.run_tracking_loop)
-        self.tracking_thread.daemon = True
-        self.tracking_thread.start()
-        
-        logger.info(f"Started tracking with countdown for user {user_id}, module {module_id}")
+
+        if self.auto_start_loop:
+            # Start with countdown only for new modules
+            self.start_countdown()
+            
+            # Start tracking in a separate thread
+            self.tracking_thread = threading.Thread(target=self.run_tracking_loop)
+            self.tracking_thread.daemon = True
+            self.tracking_thread.start()
+            
+            logger.info(f"Started tracking with countdown for user {user_id}, module {module_id}")
+        else:
+            # Remote/browser streaming mode - no countdown or webcam loop
+            self.countdown_active = False
+            self.tracking_state = "tracking"
+            self.is_tracking = True
+            if not self.session_data['session_start']:
+                self.session_data['session_start'] = time.time()
     
     def stop_tracking(self):
         """Stop tracking and save final data"""
@@ -1165,6 +1190,44 @@ class EyeTrackingService:
         
         self.tracking_state = "stopped"
         logger.info("Eye tracking stopped")
+
+    def process_remote_frame(self, frame, user_id, module_id, section_id=None):
+        """
+        Process a browser-streamed frame instead of reading directly from a webcam.
+
+        This method mirrors the logic from the local tracking loop so remote deployments
+        (Railway) produce the exact same metrics and saved data as local Flask mode.
+        """
+        if self.auto_start_loop:
+            raise RuntimeError("process_remote_frame is only available when auto_start_loop=False")
+
+        if not getattr(self, 'remote_session_active', False):
+            self.remote_session_active = True
+
+        session_changed = (
+            not getattr(self, 'current_user_id', None)
+            or self.current_user_id != user_id
+            or self.current_module_id != module_id
+        )
+
+        if session_changed:
+            self.start_tracking(user_id, module_id, section_id)
+        else:
+            if section_id and section_id != self.current_section_id:
+                self.current_section_id = section_id
+
+        if not self.session_data['session_start']:
+            self.session_data['session_start'] = time.time()
+
+        is_focused = self.is_looking_at_screen(frame)
+        self.update_focus_state(is_focused)
+
+        if time.time() - self.last_save_time > self.save_interval:
+            self.save_tracking_data()
+
+        status = self.get_status()
+        frame_data = self.get_current_frame_base64()
+        return status, frame_data
     
     def get_current_frame_base64(self):
         """Get current frame as base64 string - prioritizing real camera feeds"""

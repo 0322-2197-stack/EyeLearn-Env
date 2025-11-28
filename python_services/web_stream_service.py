@@ -7,8 +7,6 @@ and summarized results are pushed to the existing PHP endpoint.
 """
 
 from __future__ import annotations
-
-import asyncio
 import base64
 import json
 import logging
@@ -17,7 +15,6 @@ import time
 import uuid
 from typing import Any, Dict, Optional
 
-import httpx
 import numpy as np
 from fastapi import (
     BackgroundTasks,
@@ -32,6 +29,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, BaseSettings, Field, validator
 from starlette.concurrency import run_in_threadpool
+
+from python_services.eye_tracking_service import EyeTrackingService
 
 
 class Settings(BaseSettings):
@@ -68,6 +67,11 @@ class Settings(BaseSettings):
         description="Logical FPS budget enforced per client.",
     )
     model_name: str = Field(default="mediapipe-face-mesh", env="MODEL_NAME")
+    browser_streaming_enabled: bool = Field(
+        default=True,
+        env="ENABLE_BROWSER_EYE_STREAMING",
+        description="Disable to force clients to use local Flask service.",
+    )
 
     class Config:
         env_file = ".env"
@@ -82,6 +86,12 @@ settings = Settings()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("web-stream-service")
+
+browser_tracker = EyeTrackingService(
+    tracking_save_url=settings.tracking_save_url,
+    camera_enabled=False,
+    auto_start_loop=False,
+)
 
 app = FastAPI(title=settings.app_name)
 
@@ -112,20 +122,6 @@ class FramePayload(BaseModel):
         return value
 
 
-async def async_post_tracking(payload: Dict[str, Any]) -> None:
-    """Forward processed tracking data to the PHP analytics endpoint."""
-
-    if not settings.tracking_save_url:
-        logger.debug("TRACKING_SAVE_URL not configured; skipping forward.")
-        return
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(settings.tracking_save_url, json=payload)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to forward tracking payload: %s", exc)
-
-
 def decode_frame(data_url: str) -> np.ndarray:
     """Convert a browser data URL (base64-encoded) into a numpy array image."""
 
@@ -148,50 +144,47 @@ def decode_frame(data_url: str) -> np.ndarray:
         raise HTTPException(status_code=500, detail=f"cv2 missing: {exc}") from exc
 
 
-def run_eye_model(image: np.ndarray) -> Dict[str, Any]:
-    """
-    Placeholder for actual eye-tracking inference.
-
-    Replace with MediaPipe / custom model. Return lightweight JSON summary.
-    """
-
-    # Example pseudo results derived from image statistics
-    gray_mean = float(np.mean(image))
-    attention_score = round(min(1.0, gray_mean / 255.0), 3)
-    gaze_vector = {"x": 0.0, "y": 0.0, "z": 1.0}
-    eye_landmarks = [{"x": 0.5, "y": 0.5}]  # Replace with real landmarks
-
-    return {
-        "attention_score": attention_score,
-        "gaze_vector": gaze_vector,
-        "eye_landmarks": eye_landmarks,
-        "model": settings.model_name,
-    }
-
-
 async def process_frame(payload: FramePayload) -> Dict[str, Any]:
-    """Decode, run inference, and format result dict."""
+    """Decode frame, run the shared eye-tracking pipeline, and format response."""
+
+    if not settings.browser_streaming_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Browser streaming disabled. Please fall back to the local Flask service.",
+        )
+
+    if not payload.user_id or not payload.module_id:
+        raise HTTPException(status_code=400, detail="user_id and module_id are required.")
 
     image = await run_in_threadpool(decode_frame, payload.frame_base64)
-    result = await run_in_threadpool(run_eye_model, image)
+    status, frame_data = await run_in_threadpool(
+        browser_tracker.process_remote_frame,
+        image,
+        payload.user_id,
+        payload.module_id,
+        payload.section_id,
+    )
 
     response = {
+        "success": True,
         "frame_id": payload.frame_id,
         "user_id": payload.user_id,
         "module_id": payload.module_id,
         "section_id": payload.section_id,
         "timestamp": payload.timestamp,
-        "metrics": result,
+        "status": status,
+        "metrics": status.get("metrics"),
+        "current_frame": frame_data,
     }
     return response
 
 
 @app.post("/api/frames")
-async def ingest_frame(payload: FramePayload, background: BackgroundTasks) -> JSONResponse:
+@app.post("/api/stream-frame")
+async def ingest_frame(payload: FramePayload) -> JSONResponse:
     """HTTP endpoint hit by fetch() in the browser."""
 
     result = await process_frame(payload)
-    background.add_task(async_post_tracking, result)
     return JSONResponse(content=result)
 
 
@@ -239,7 +232,6 @@ async def websocket_frames(websocket: WebSocket, limiter: WebSocketLimiter = Dep
                 continue
 
             result = await process_frame(payload)
-            asyncio.create_task(async_post_tracking(result))
             await websocket.send_json(result)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
@@ -253,6 +245,7 @@ async def health() -> Dict[str, Any]:
         "status": "ok",
         "camera_enabled": settings.camera_enabled,
         "model": settings.model_name,
+        "browser_streaming_enabled": settings.browser_streaming_enabled,
     }
 
 

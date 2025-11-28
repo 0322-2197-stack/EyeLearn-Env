@@ -46,7 +46,7 @@ Key features:
 
 - Enforces `CAMERA_ENABLED=False` by default so Railway never tries to open a webcam.
 - Accepts Base64 frames via REST or WebSocket, validates payload size, and decodes using `opencv-python-headless`.
-- Runs your eye-tracking model (`run_eye_model()` placeholder) and returns gaze vectors, landmarks, and attention score JSON.
+- Reuses the same `EyeTrackingService` class from the legacy Flask workflow, so gaze detection, blink logic, and metric payloads are identical between local and browser-streamed modes.
 - Asynchronously forwards each result to the PHP endpoint defined by `TRACKING_SAVE_URL`.
 - Applies strict CORS (comma-separated `ALLOWED_ORIGINS`) and rejects oversized frames (`MAX_FRAME_KB`) to mitigate abuse.
 - Offers `/healthz` for Railway health checks.
@@ -77,6 +77,7 @@ ALLOWED_ORIGINS=https://eyelearn-env-production.up.railway.app
 MAX_FRAME_KB=512
 MAX_CLIENT_FPS=10
 MODEL_NAME=mediapipe-face-mesh
+ENABLE_BROWSER_EYE_STREAMING=1
 ```
 
 Sample `.env.local` for the browser build (if bundling):
@@ -141,7 +142,7 @@ VITE_MAX_CAPTURE_FPS=7
 
 ## Next Steps
 
-1. Swap `run_eye_model()` with your actual inference pipeline (MediaPipe, custom ONNX, etc.).
+1. (Done) FastAPI now calls the same `EyeTrackingService` core used by the Flask app, so no further model swaps are required unless you change the legacy pipeline itself.
 2. Wire the JS example into your PHP/Laravel/Vite front-end build.
 3. Add automated tests hitting `/api/frames` with fixture images to guard against regressions.
 4. Configure Railway alerts (deployment & runtime) plus PHP endpoint monitoring to catch outages quickly.
