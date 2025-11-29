@@ -1025,6 +1025,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         const currentCompletionPercentage = <?php echo json_encode($completion_percentage); ?>; //Tofu: pass completion percentage
         window.PYTHON_SERVICE_URL = <?php echo json_encode($python_service_url); ?>;
+
+        // Expose the currently authenticated user ID for JS-only endpoints
+        // This is especially important on Railway where PHP sessions may not persist
+        // reliably across stateless requests.
+        window.CURRENT_USER_ID = <?php echo isset($user_id) ? intval($user_id) : 'null'; ?>;
     </script>
     <script src="js/cv-eye-tracking.js?canvas_debug_<?php echo time(); ?>"></script>
     <script>

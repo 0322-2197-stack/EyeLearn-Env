@@ -545,6 +545,10 @@ class CVEyeTrackingSystem {
 
         try {
             const sessionData = {
+                // Prefer the authenticated user ID provided by the PHP page.
+                // This avoids relying solely on PHP session state on Railway,
+                // where sessions may not always persist across requests.
+                user_id: (typeof window !== 'undefined' && window.CURRENT_USER_ID) ? window.CURRENT_USER_ID : null,
                 module_id: this.moduleId,
                 section_id: this.sectionId,
                 session_time: Math.floor(this.timers.sessionTime || 0),

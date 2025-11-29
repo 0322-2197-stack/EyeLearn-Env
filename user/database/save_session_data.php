@@ -2,8 +2,26 @@
 header('Content-Type: application/json');
 session_start();
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
+// -------------------------------------------------------------------------
+// Determine user ID
+// -------------------------------------------------------------------------
+// Primary source: PHP session (works well on traditional hosting)
+// Fallback (for Railway/stateless hosting): explicit user_id from JSON body.
+
+// Read raw input once so we can potentially reuse it below
+$rawInput = file_get_contents('php://input');
+$input = json_decode($rawInput, true);
+
+$user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+
+// On Railway, sessions may not persist properly. If we detect a Railway
+// environment and there is no session, fall back to the user_id sent by JS.
+$isRailway = getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_STATIC_URL');
+if ($user_id === null && $isRailway && is_array($input) && isset($input['user_id'])) {
+    $user_id = (int)$input['user_id'];
+}
+
+if ($user_id === null) {
     http_response_code(401);
     echo json_encode(['error' => 'User not authenticated']);
     exit();
@@ -26,10 +44,10 @@ try {
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
-
-// Get JSON input
-$input = json_decode(file_get_contents('php://input'), true);
+// Get JSON input (reuse the already-decoded payload when possible)
+if (!is_array($input)) {
+    $input = json_decode($rawInput !== false ? $rawInput : '', true);
+}
 
 if (!$input) {
     http_response_code(400);
